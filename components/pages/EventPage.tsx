@@ -335,10 +335,14 @@ export default function EventPage({ content, pa }: Props) {
                 {regUrl && (
                   <a
                     href={regUrl}
-                    className="btn-signal group flex items-center justify-center gap-xs rounded-ot-control bg-brand text-fg-on-brand px-lg py-md text-label uppercase tracking-label font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                    className="btn-signal group flex items-center justify-center rounded-ot-control bg-brand text-fg-on-brand px-lg py-md text-label uppercase tracking-label font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
                   >
-                    {isVirtual ? 'Join' : 'Register'}
-                    <ArrowRight size={16} strokeWidth={2} className="motion-safe:transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden />
+                    {/* relative z-10: sits above .btn-signal::before's absolutely-positioned
+                        hover sweep, which otherwise paints over this static-flow text */}
+                    <span className="relative z-10 inline-flex items-center gap-xs">
+                      {isVirtual ? 'Join' : 'Register'}
+                      <ArrowRight size={16} strokeWidth={2} className="motion-safe:transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden />
+                    </span>
                   </a>
                 )}
               </div>

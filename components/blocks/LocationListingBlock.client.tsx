@@ -338,9 +338,9 @@ function EmptyState({ message, filtersActive, onClear }: { message: string; filt
         <button
           type="button"
           onClick={onClear}
-          className="btn-signal mt-xs inline-flex items-center gap-xs rounded-ot-control bg-brand text-fg-on-brand px-md py-sm text-label uppercase tracking-label font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+          className="btn-signal mt-xs inline-flex items-center rounded-ot-control bg-brand text-fg-on-brand px-md py-sm text-label uppercase tracking-label font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
         >
-          Clear search &amp; filters
+          <span className="relative z-10">Clear search &amp; filters</span>
         </button>
       )}
     </div>
