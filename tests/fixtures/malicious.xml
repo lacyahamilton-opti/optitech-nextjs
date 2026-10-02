@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<!DOCTYPE rss [<!ENTITY a "AAAAAAAAAAAAAAAAAAAAAAAAAAAA"><!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;">]>
+<rss version="2.0"><channel><title>evil</title>
+<item>
+  <title>&lt;script&gt;alert(1)&lt;/script&gt;Hello &lt;img src=x onerror=alert(1)&gt;</title>
+  <link>https://example.com/ok</link>
+  <description>&lt;p onclick="x()"&gt;Body &lt;script&gt;steal()&lt;/script&gt;&lt;!-- wp:paragraph --&gt; text &amp;amp;lt;b&amp;amp;gt; &amp;b;&lt;/p&gt;</description>
+  <pubDate>Tue, 29 Sep 2026 10:30:00 GMT</pubDate>
+  <enclosure url="http://insecure.example.com/a.jpg" type="image/jpeg"/>
+</item>
+<item>
+  <title>javascript link</title>
+  <link>javascript:alert(document.cookie)</link>
+</item>
+<item>
+  <title>data link</title>
+  <link>data:text/html,&lt;script&gt;alert(1)&lt;/script&gt;</link>
+</item>
+<item>
+  <title>Credentialed link</title>
+  <link>https://user:pass@example.com/x</link>
+</item>
+<item>
+  <title>Bad image scheme</title>
+  <link>https://example.com/img</link>
+  <description>&lt;img src="javascript:alert(1)"/&gt;&lt;img src="http://insecure.example.com/x.png"/&gt;</description>
+</item>
+</channel></rss>

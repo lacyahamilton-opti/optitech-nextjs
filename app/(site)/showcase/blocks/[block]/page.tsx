@@ -60,6 +60,8 @@ import ButtonPlayground       from '../button-playground'
 import TrustRailPlayground    from '../trust-rail-playground'
 import TokenManagerPlayground from '../token-manager-playground'
 import SliderPlayground       from '../slider-playground'
+import OT_IndustryNewsFeedBlock  from '@/cms/components/OT_IndustryNewsFeedBlock'
+import { enabledFeeds }          from '@/lib/feeds/registry'
 
 // ─── Static params ──────────────────────────────────────────────────────────
 
@@ -73,6 +75,7 @@ const BLOCK_SLUGS = [
   'disclosure',
   'token-manager',
   'slider',
+  'industry-news-feed',
 ] as const
 
 type BlockSlug = typeof BLOCK_SLUGS[number]
@@ -109,6 +112,7 @@ const BLOCK_META: Record<BlockSlug, { label: string; cmsKey: string; description
   'disclosure':       { label: 'DisclosureBlock',      cmsKey: 'OT_DisclosureBlock',      description: 'Legal and regulatory disclosures, rate notices, and footnotes. Items are auto-numbered (¹ ² ³ or a b c) — single-item blocks suppress the marker. Two styles: Fine Print (ultra-subtle footnote treatment) and Section (slightly elevated zone). Heading and marker style are content-type properties; no display template settings to configure.' },
   'token-manager':    { label: 'TokenManager',          cmsKey: 'OT_TokenManager',          description: 'Global text-token system. Authors define key–value pairs (e.g. product-name → Advantage Checking); any CMS field that contains {{product-name}} receives the value at render time — in the CMS preview and on published pages. Token keys are language-neutral; values can be translated per locale. Singleton shared block, like ThemeManager.' },
   'slider':           { label: 'SliderBlock',           cmsKey: 'OT_SliderBlock',           description: 'Section-level slideshow with 2–8 slides. A Presentation Style (Cinematic, Editorial Split, Story Rail, Emerge) sets the composition and slide-to-slide transition — all four are fully implemented, though not every setting applies to every style, by design rather than by omission: Content Placement and Content Vertical Alignment are honored by Cinematic, Editorial Split, and Emerge but ignored by Story Rail, whose content position is fixed; Editorial Split’s Overlay tints only its media panel, never the text panel; Story Rail collapses Navigation’s Arrows/Dots/Both into a single gutter-control outcome, since it has no separate dot row; and Emerge replaces arrows/dots entirely with a bottom nav dock — clickable per-slide cards plus a chevron pair — whose reveal transition uncovers each incoming slide from the bottom edge up, identically regardless of direction. Full keyboard/ARIA carousel semantics, a mandatory pause control whenever Auto-Play is on, and a reduced-motion collapse for every transition.' },
+  'industry-news-feed': { label: 'IndustryNewsFeed', cmsKey: 'OT_IndustryNewsFeedBlock', description: 'Latest headlines from a pre-approved external industry feed (Healthcare, Banking, Retail, Hospitality, Insurance, Legal, Technology). The editor picks an industry; the server resolves it to a registry-held feed URL, fetches with a guarded fetch, and normalizes to headline, short summary, thumbnail and date. Every story links out to the publisher in a new tab with source attribution. Layout, item count, and image/date/summary/source toggles are content properties. Live data — the showcase fetches the real feeds.' },
 }
 
 export function generateStaticParams() {
@@ -2869,6 +2873,42 @@ function ComparisonTableShowcase() {
 // every other showcase block page in this file to opt out of static
 // rendering if read here instead.
 
+function IndustryNewsFeedShowcase() {
+  const feeds = enabledFeeds()
+  return (
+    <>
+      <BlockHeader slug="industry-news-feed" />
+      <VariantGroup label="Industries" />
+      {feeds.map(f => (
+        <div key={f.id} className="border-t border-fg/5">
+          <VariantLabel label={f.label} note={f.sourceName} />
+          <OT_IndustryNewsFeedBlock
+            content={{ industry: f.id, itemCount: 3, heading: `Latest ${f.label.toLowerCase()} news` } as any}
+            displaySettings={{ color: 'canvas' }}
+          />
+        </div>
+      ))}
+      <VariantGroup label="Toggles" />
+      {[
+        { label: 'No images',               content: { showImage: false } },
+        { label: 'Headlines only',          content: { showImage: false, showSummary: false, showDate: false } },
+        { label: 'No source attribution',   content: { showSource: false } },
+        { label: 'Surface background',      content: {}, displaySettings: { color: 'surface' } },
+        { label: 'Industry not set (live site renders nothing)', content: { industry: undefined } },
+      ].map(item => (
+        <div key={item.label} className="border-t border-fg/5">
+          <VariantLabel label={item.label} />
+          <OT_IndustryNewsFeedBlock
+            content={{ industry: 'healthcare', itemCount: 3, heading: 'Latest healthcare news', ...item.content } as any}
+            displaySettings={(item as { displaySettings?: DS }).displaySettings ?? {}}
+          />
+        </div>
+      ))}
+      <div className="pb-xl" />
+    </>
+  )
+}
+
 export default async function ShowcaseBlockPage({ params }: Props) {
   const { block } = await params
 
@@ -2889,6 +2929,7 @@ export default async function ShowcaseBlockPage({ params }: Props) {
     case 'tabs':         return <><BlockHeader slug="tabs" /><TabsPlayground /></>
     case 'tab-item':     return <><BlockHeader slug="tab-item" /><TabItemPlayground /></>
     case 'blog-feed':    return <BlogFeedShowcase />
+    case 'industry-news-feed': return <IndustryNewsFeedShowcase />
     case 'button':       return <><BlockHeader slug="button" /><ButtonPlayground /></>
     case 'chart':        return <ChartShowcase />
     case 'banner':            return <><BlockHeader slug="banner" /><BannerPlayground /></>
