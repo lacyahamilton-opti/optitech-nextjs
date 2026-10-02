@@ -31,6 +31,9 @@ import TopicHubPage            from '@/components/pages/TopicHubPage'
 import Script                  from 'next/script'
 import { DraftStateBanner }    from '@/components/preview/DraftStateBanner'
 import { ExternalPreviewLinkPanel } from '@/components/preview/ExternalPreviewLinkPanel'
+import { ReviewCommentWidget }    from '@/components/preview/ReviewCommentWidget'
+import { ReviewCommentsStrip }    from '@/components/preview/ReviewCommentsStrip'
+import { reviewCommentsEnabled }  from '@/lib/review-comments'
 import { buildExternalPreviewUrl, contentPathname, type PreviewableContent } from '@/lib/external-preview'
 import { buildPageMetadata, type PageSeoFields } from '@/lib/metadata'
 import { buildJsonLd }         from '@/lib/structured-data'
@@ -228,8 +231,20 @@ async function CmsPage({ params, searchParams }: Props) {
             authorName={banner.authorName}
           />
         )}
+        {isExternalPreview && sp_str('key') && reviewCommentsEnabled() && (
+          <ReviewCommentWidget
+            contentKey={sp_str('key')}
+            version={sp_str('ver')}
+            locale={sp_str('loc') || locale}
+            path={contentPathname(content) ?? path}
+            title={banner.headline ?? undefined}
+          />
+        )}
         {externalPreviewUrl && (
-          <ExternalPreviewLinkPanel url={externalPreviewUrl} topic={banner.topic ?? undefined} />
+          <>
+            <ExternalPreviewLinkPanel url={externalPreviewUrl} topic={banner.topic ?? undefined} />
+            <ReviewCommentsStrip contentKey={sp_str('key')} />
+          </>
         )}
       </>
     )

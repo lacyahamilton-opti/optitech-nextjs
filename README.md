@@ -259,6 +259,23 @@ The write is best-effort: if the CMS write fails the webhook still returns `200`
 | Durable delivery store + `content_guid` → CMS key map | [`lib/cmpPreviewStore.ts`](lib/cmpPreviewStore.ts) |
 | CMS Management API client (`upsertBlogPage`) | [`lib/cmsApi.ts`](lib/cmsApi.ts) |
 
+## External Preview · Reviewer Comments
+
+External reviewers who open a draft page through an **External Preview Link** see a "Leave feedback" pill (bottom-right). Name and comment are required; email is optional. On submit the server posts the comment to a **Mark webhook** (Mark resolves and emails the content author from the content key) and, when KV is configured, stores it so the author sees a **Reviewer feedback** strip under the External Preview Link panel in the CMS preview. Reviewer name/email are self-reported and unverified.
+
+```bash
+# .env.local (development) or Vercel/Netlify environment settings — all server-side
+MARK_REVIEW_WEBHOOK_URL=      # https URL; blank = feature fully hidden, API returns 404
+MARK_REVIEW_WEBHOOK_SECRET=   # sent as X-Review-Secret when set
+KV_REST_API_URL=              # optional — blank = no stored history / author strip
+KV_REST_API_TOKEN=
+```
+
+- Set these **per environment** (Vercel: Production, Preview *and* Development; Netlify: available at runtime for functions, not build-only), then **redeploy**.
+- Stored comments (including any reviewer email) live in KV for **60 days** (refreshed on each new comment; capped at 200 per page). There is no in-memory fallback.
+- Abuse controls: draft-mode + same-origin required, honeypot field, and a hard-coded per-instance limit of 5 submissions/minute/IP.
+- Where it lives: [`lib/review-comments.ts`](lib/review-comments.ts), [`lib/review-comment-handler.ts`](lib/review-comment-handler.ts), [`app/api/review-comment/route.ts`](app/api/review-comment/route.ts), [`components/preview/ReviewCommentWidget.tsx`](components/preview/ReviewCommentWidget.tsx), [`components/preview/ReviewCommentsStrip.tsx`](components/preview/ReviewCommentsStrip.tsx).
+
 ## OptiAdmin Dashboard
 
 OptiAdmin is a lightweight, self-contained admin area for inspecting the content in your Optimizely CMS instance. It lives under [`app/opti-admin/`](app/opti-admin/) and reads live data through Optimizely Graph — it is read-only and does not write back to the CMS.

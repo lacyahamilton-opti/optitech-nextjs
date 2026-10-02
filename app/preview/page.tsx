@@ -17,6 +17,7 @@ import Footer from '@/components/layout/Footer'
 import Script from 'next/script'
 import { redirect } from 'next/navigation'
 import { ExternalPreviewLinkPanel } from '@/components/preview/ExternalPreviewLinkPanel'
+import { ReviewCommentsStrip } from '@/components/preview/ReviewCommentsStrip'
 import { buildExternalPreviewUrl, contentPathname, toPathname } from '@/lib/external-preview'
 
 export const dynamic  = 'force-dynamic'
@@ -272,6 +273,7 @@ async function PreviewPage({ searchParams }: Props) {
           topic={content?.topic ?? undefined}
         />
       )}
+      {externalPreviewUrl && <ReviewCommentsStrip contentKey={sp('key')} />}
 
       {isExperience ? (
         <>
