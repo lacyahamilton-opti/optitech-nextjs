@@ -6,7 +6,6 @@ import { getRequestLocale } from '@/lib/optimizely'
 import { getEnabledFeed } from '@/lib/feeds/registry'
 import { getFeed } from '@/lib/feeds/service'
 import { DEFAULT_LIMIT, MAX_LIMIT, MIN_LIMIT } from '@/lib/feeds/request'
-import { toFeedLayout } from '@/lib/feeds/layouts'
 import IndustryNewsFeed from '@/components/blocks/IndustryNewsFeed'
 
 type Props = {
@@ -51,7 +50,6 @@ export default async function OT_IndustryNewsFeedBlockAdapter({ content, display
         heading={content.heading || 'Latest industry news'}
         headingLevel={level}
         result={result}
-        layout={toFeedLayout(content.layout)}
         color={displaySettings.color === 'surface' ? 'surface' : 'canvas'}
         showImage={on(content.showImage)}
         showDate={on(content.showDate)}
