@@ -3,7 +3,7 @@
 /**
  * DraftStateBanner
  *
- * Shown to external reviewers who open a blog post via an External Preview Link.
+ * Shown to external reviewers who open a draft page via an External Preview Link.
  * Appears as a fixed strip across the top of the viewport. Collapses to a small
  * floating pill anchored to the bottom-left corner (clear of nav CTAs) when dismissed.
  *

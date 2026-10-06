@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useMemo, useCallback, useId } from 'react'
+import { useState, useMemo, useCallback, useId, useRef } from 'react'
 import {
   LayoutGrid, List, Calendar as CalendarIcon,
   ChevronLeft, ChevronRight, ChevronRight as ChevronGo,
-  MapPin, Video, Award, CalendarX2, ArrowRight,
+  MapPin, Video, Award, CalendarX2, ArrowRight, Layers,
 } from 'lucide-react'
 import type { EventCardData } from '@/lib/events'
+import { FilterTriggerButton, FilterDrawer, FilterRadioGroup } from '@/components/ui/FilterDrawer'
 import {
   eventTypeLabel,
   formatEventDate,
@@ -35,6 +36,8 @@ export type EventListingClientProps = {
   typeLocked:     boolean
   /** Server-stamped ISO "now" — keeps the upcoming/past split + today marker stable. */
   nowIso:         string
+  /** True for any CMS draft/preview render — hides the filter trigger + drawer. */
+  isPreview?:     boolean
 }
 
 // Canonical type ordering for the filter chips.
@@ -608,23 +611,6 @@ function ViewToggle({ view, onChange }: { view: View; onChange: (v: View) => voi
   )
 }
 
-function TypeChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      className={`rounded-ot-control text-label uppercase tracking-label font-semibold px-sm py-1.25 border transition-colors duration-150 ease-quick cursor-pointer
-        focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand
-        ${active
-          ? 'bg-brand border-transparent text-fg-on-brand'
-          : 'bg-transparent border-fg/15 text-fg-muted hover:border-fg/30 hover:text-fg'}`}
-    >
-      {label}
-    </button>
-  )
-}
-
 // ─── Listing grid (card/list with optional past divider) ────────────────────────
 
 function ListingBody({
@@ -682,12 +668,16 @@ export default function EventListingClient({
   pastMode,
   typeLocked,
   nowIso,
+  isPreview = false,
 }: EventListingClientProps) {
   const now = useMemo(() => new Date(nowIso), [nowIso])
 
   const [view,       setView]       = useState<View>(defaultView)
   const [activeType, setActiveType] = useState<string | null>(null)
   const [showPast,   setShowPast]   = useState(pastMode === 'show')
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const filterTriggerRef = useRef<HTMLButtonElement>(null)
+  const filterPanelId    = useId()
 
   // Lock the view when the editor disabled the toggle.
   const effectiveView: View = showViewToggle ? view : defaultView
@@ -722,7 +712,8 @@ export default function EventListingClient({
 
   const changeType = useCallback((t: string | null) => setActiveType(t), [])
 
-  const showChips    = showTypeFilter && !typeLocked && availableTypes.length > 0
+  // Hidden entirely in CMS preview/edit renders — live-front-end feature only.
+  const showChips    = showTypeFilter && !typeLocked && availableTypes.length > 0 && !isPreview
   const showPastCtrl = pastMode === 'toggle' && past.length > 0 && effectiveView !== 'calendar'
 
   // ── Empty states for card/list ────────────────────────────────────────────
@@ -742,17 +733,13 @@ export default function EventListingClient({
         <div className="flex flex-wrap items-center justify-between gap-md pb-md mb-lg border-b border-fg/8">
           <div className="flex flex-wrap items-center gap-sm">
             {showChips && (
-              <div className="flex flex-wrap items-center gap-xs" role="group" aria-label="Filter by event type">
-                <TypeChip label="All" active={activeType === null} onClick={() => changeType(null)} />
-                {availableTypes.map(t => (
-                  <TypeChip
-                    key={t}
-                    label={eventTypeLabel(t)}
-                    active={activeType === t}
-                    onClick={() => changeType(activeType === t ? null : t)}
-                  />
-                ))}
-              </div>
+              <FilterTriggerButton
+                ref={filterTriggerRef}
+                open={filtersOpen}
+                onClick={() => setFiltersOpen(v => !v)}
+                activeCount={activeType ? 1 : 0}
+                panelId={filterPanelId}
+              />
             )}
           </div>
 
@@ -773,37 +760,67 @@ export default function EventListingClient({
         </div>
       )}
 
+      {showChips && (
+        <FilterDrawer
+          id={filterPanelId}
+          open={filtersOpen}
+          onClose={() => setFiltersOpen(false)}
+          activeCount={activeType ? 1 : 0}
+          onClearAll={() => changeType(null)}
+          triggerRef={filterTriggerRef}
+        >
+          <FilterRadioGroup
+            icon={Layers}
+            heading="Type"
+            ariaLabel="Filter by event type"
+            value={activeType}
+            onSelect={changeType}
+            options={[
+              { value: null as string | null, label: 'All' },
+              ...availableTypes.map(t => ({ value: t as string | null, label: eventTypeLabel(t) })),
+            ]}
+          />
+        </FilterDrawer>
+      )}
+
       {/* SR-only result announcement — the visible body below swaps silently */}
       <p className="sr-only" aria-live="polite" aria-atomic="true">{resultAnnouncement}</p>
 
       {/* ── Views ────────────────────────────────────────────────────────────── */}
       {effectiveView === 'calendar' ? (
         <CalendarView events={typeFiltered} color={color} now={now} />
-      ) : listEmpty ? (
-        activeType !== null ? (
-          <EmptyShell icon={<CalendarX2 size={20} strokeWidth={1.5} />} title={`No ${eventTypeLabel(activeType).toLowerCase()} events`}>
-            <button
-              type="button"
-              onClick={() => changeType(null)}
-              className="mt-xs text-label uppercase tracking-label font-semibold text-brand hover:text-brand-hover transition-colors duration-150 ease-quick focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-            >
-              Clear filter
-            </button>
-          </EmptyShell>
-        ) : (
-          <EmptyShell icon={<CalendarX2 size={20} strokeWidth={1.5} />} title="No upcoming events">
-            <p className="text-body text-fg-muted">Check back soon for new events.</p>
-          </EmptyShell>
-        )
       ) : (
-        <ListingBody
-          view={effectiveView}
-          upcoming={capUpcoming}
-          past={capPast}
-          color={color}
-          showPast={showPast}
-          pastMode={pastMode}
-        />
+        // Keyed on the active type so a filter change fades the swapped-in set
+        // in. Calendar is excluded above — it owns its own month-navigation
+        // state, which a remount would silently reset.
+        <div key={activeType ?? 'all'} className="animate-filter-swap">
+          {listEmpty ? (
+            activeType !== null ? (
+              <EmptyShell icon={<CalendarX2 size={20} strokeWidth={1.5} />} title={`No ${eventTypeLabel(activeType).toLowerCase()} events`}>
+                <button
+                  type="button"
+                  onClick={() => changeType(null)}
+                  className="mt-xs text-label uppercase tracking-label font-semibold text-brand hover:text-brand-hover transition-colors duration-150 ease-quick focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                >
+                  Clear filter
+                </button>
+              </EmptyShell>
+            ) : (
+              <EmptyShell icon={<CalendarX2 size={20} strokeWidth={1.5} />} title="No upcoming events">
+                <p className="text-body text-fg-muted">Check back soon for new events.</p>
+              </EmptyShell>
+            )
+          ) : (
+            <ListingBody
+              view={effectiveView}
+              upcoming={capUpcoming}
+              past={capPast}
+              color={color}
+              showPast={showPast}
+              pastMode={pastMode}
+            />
+          )}
+        </div>
       )}
     </div>
   )

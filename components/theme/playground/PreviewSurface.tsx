@@ -101,7 +101,7 @@ export function PreviewSurface({
             </p>
             <div className="flex flex-wrap gap-sm pt-1">
               <button className="btn-signal bg-brand text-fg-on-brand text-label font-semibold tracking-label uppercase px-6 py-3 rounded-ot-control">
-                Get started
+                <span className="relative z-10">Get started</span>
               </button>
               <button className="border border-fg/25 text-fg text-label font-semibold tracking-label uppercase px-6 py-3 rounded-ot-control hover:border-fg/50 transition-colors">
                 View docs

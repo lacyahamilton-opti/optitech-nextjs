@@ -5,6 +5,7 @@ import { MapPin } from 'lucide-react'
 import { OT_LocationProfile as OT_LocationProfileContentType } from '@/cms/content-types/OT_LocationProfile'
 import LocationPlate from '@/components/location/LocationPlate'
 import LocationLabelBadge from '@/components/location/LocationLabelBadge'
+import { richTextJson } from '@/lib/richTextJson'
 
 type Props = {
   content:          ContentProps<typeof OT_LocationProfileContentType>
@@ -26,7 +27,7 @@ export default function OT_LocationProfileAdapter({ content }: Props) {
   const label     = content.locationLabel ?? ''
   const address   = content.address ?? ''
   const imageUrl  = src(content.image)
-  const detailsJson = content.details?.json ?? undefined
+  const detailsJson = richTextJson(content.details)
 
   return (
     <div className="min-h-screen bg-canvas px-md py-xl lg:px-lg" {...pa(content.__composition)}>

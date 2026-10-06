@@ -1,6 +1,7 @@
 import { contentType } from '@optimizely/cms-sdk'
 import { OT_TopicHubRecommendation } from './OT_TopicHubRecommendation'
 import { OT_TopicHubBucket }         from './OT_TopicHubBucket'
+import { enableExternalPreviewProperty } from './_shared/externalPreview'
 
 export const OT_TopicHubPage = contentType({
   key:             'OT_TopicHubPage',
@@ -9,6 +10,8 @@ export const OT_TopicHubPage = contentType({
   baseType:        '_page',
   mayContainTypes: ['*'],
   properties: {
+    enableExternalPreview: enableExternalPreviewProperty,
+
 
     // ── Identity ────────────────────────────────────────────────────────────
     headerName: {

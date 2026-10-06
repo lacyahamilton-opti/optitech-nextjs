@@ -2,7 +2,12 @@
 
 // `href` overrides the default `/showcase/<category>/<slug>` route — used for
 // in-page anchor links (e.g. the Theme playground's section jumps).
-export type ShowcaseItem = { label: string; slug: string; href?: string }
+// `group` opts a category into the nav's grouped-mega-menu layout (sorted
+// alphabetically within each group, groups in the order they first appear in
+// the array below). Categories that leave every item's `group` unset keep
+// rendering in plain array order — e.g. Theme's items are deliberately
+// ordered to match the playground's own section order, not alphabetically.
+export type ShowcaseItem = { label: string; slug: string; href?: string; group?: string }
 
 export type ShowcaseCategory = {
   label: string
@@ -18,38 +23,53 @@ export const CATEGORIES: ShowcaseCategory[] = [
     slug:  'blocks',
     match: '/showcase/blocks',
     href:  '/showcase/blocks/hero',
+    // Grouped for the mega-menu (see ShowcaseItem['group'] doc above) —
+    // groups appear in this order, items alphabetical within each group.
     items: [
-      { label: 'Hero',         slug: 'hero'         },
-      { label: 'Card',         slug: 'card'         },
-      { label: 'Primary Text', slug: 'primary-text' },
-      { label: 'Quote',        slug: 'quote'        },
-      { label: 'Rich Text',    slug: 'rich-text'    },
-      { label: 'Image',        slug: 'image'        },
-      { label: 'Video',        slug: 'video'        },
-      { label: 'Stat',         slug: 'stat'         },
-      { label: 'Stat Item',    slug: 'stat-item'    },
-      { label: 'Feature Grid', slug: 'feature-grid' },
-      { label: 'Feature Item', slug: 'feature-item' },
-      { label: 'Trust Rail',   slug: 'trust-rail'   },
-      { label: 'Accordion',    slug: 'accordion'    },
-      { label: 'Tabs',         slug: 'tabs'         },
-      { label: 'Tab Item',     slug: 'tab-item'     },
-      { label: 'Blog Feed',    slug: 'blog-feed'    },
-      { label: 'Button',       slug: 'button'       },
-      { label: 'Chart',        slug: 'chart'        },
-      { label: 'Banner',            slug: 'banner'           },
-      { label: 'Resource Library', slug: 'resource-library' },
-      { label: 'Callout',          slug: 'callout'          },
-      { label: 'Divider',          slug: 'divider'          },
-      { label: 'Event Listing',    slug: 'event-listing'    },
-      { label: 'Practitioner Listing', slug: 'practitioner-listing' },
-      { label: 'Location Listing',     slug: 'location-listing'     },
-      { label: 'Content Recommendations', slug: 'content-recommendations' },
-      { label: 'Product Recommendations', slug: 'product-recommendations' },
-      { label: 'Comparison Table',        slug: 'comparison-table'        },
-      { label: 'Disclosure',              slug: 'disclosure'              },
-      { label: 'Token Manager',           slug: 'token-manager'           },
-      { label: 'Forms',                   slug: 'forms'                   },
+      // Hero & Content
+      { label: 'Callout',      slug: 'callout',      group: 'Hero & Content' },
+      { label: 'Divider',      slug: 'divider',      group: 'Hero & Content' },
+      { label: 'Hero',         slug: 'hero',         group: 'Hero & Content' },
+      { label: 'Primary Text', slug: 'primary-text', group: 'Hero & Content' },
+      { label: 'Quote',        slug: 'quote',        group: 'Hero & Content' },
+      { label: 'Rich Text',    slug: 'rich-text',    group: 'Hero & Content' },
+
+      // Media
+      { label: 'Banner', slug: 'banner', group: 'Media' },
+      { label: 'Image',  slug: 'image',  group: 'Media' },
+      { label: 'Slider', slug: 'slider', group: 'Media' },
+      { label: 'Video',  slug: 'video',  group: 'Media' },
+
+      // Data & Metrics
+      { label: 'Chart',            slug: 'chart',            group: 'Data & Metrics' },
+      { label: 'Comparison Table', slug: 'comparison-table', group: 'Data & Metrics' },
+      { label: 'Stat',             slug: 'stat',             group: 'Data & Metrics' },
+      { label: 'Stat Item',        slug: 'stat-item',        group: 'Data & Metrics' },
+      { label: 'Token Manager',    slug: 'token-manager',    group: 'Data & Metrics' },
+
+      // Listings & Feeds
+      { label: 'Blog Feed',                slug: 'blog-feed',                group: 'Listings & Feeds' },
+      { label: 'Content Recommendations',  slug: 'content-recommendations',  group: 'Listings & Feeds' },
+      { label: 'Event Listing',            slug: 'event-listing',            group: 'Listings & Feeds' },
+      { label: 'Industry News Feed',       slug: 'industry-news-feed',       group: 'Listings & Feeds' },
+      { label: 'Location Listing',         slug: 'location-listing',         group: 'Listings & Feeds' },
+      { label: 'Practitioner Listing',     slug: 'practitioner-listing',     group: 'Listings & Feeds' },
+      { label: 'Product Recommendations',  slug: 'product-recommendations',  group: 'Listings & Feeds' },
+      { label: 'Resource Library',         slug: 'resource-library',         group: 'Listings & Feeds' },
+      { label: 'Trust Rail',               slug: 'trust-rail',               group: 'Listings & Feeds' },
+
+      // Structure & Interaction
+      { label: 'Accordion',    slug: 'accordion',    group: 'Structure & Interaction' },
+      { label: 'Card',         slug: 'card',         group: 'Structure & Interaction' },
+      { label: 'Disclosure',   slug: 'disclosure',   group: 'Structure & Interaction' },
+      { label: 'Feature Grid', slug: 'feature-grid', group: 'Structure & Interaction' },
+      { label: 'Feature Item', slug: 'feature-item', group: 'Structure & Interaction' },
+      { label: 'Tab Item',     slug: 'tab-item',     group: 'Structure & Interaction' },
+      { label: 'Tabs',         slug: 'tabs',         group: 'Structure & Interaction' },
+
+      // Actions
+      { label: 'Button', slug: 'button', group: 'Actions' },
+      { label: 'Forms',  slug: 'forms',  group: 'Actions' },
     ],
   },
   {

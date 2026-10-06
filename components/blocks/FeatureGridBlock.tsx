@@ -15,8 +15,9 @@ export type FeatureGridStyleOptions = {
   columns?:   2 | 3 | 4
   /**
    * none:       Icons hidden regardless of slot configuration.
-   * accent:     Small icon (18px) inline before the headline.
-   * structural: Medium icon (32px) above the headline, slightly muted.
+   * accent:     Icon (32px, bold stroke) to the left of the headline and
+   *             body, vertically centered across both.
+   * structural: Icon (36px) in a tinted tile above the headline.
    */
   iconStyle?: 'none' | 'accent' | 'structural'
   animate?:   boolean
@@ -144,16 +145,23 @@ export default function FeatureGridBlock({
 
   // ── Grid column class ─────────────────────────────────────────────────────
   const gridColsClass =
-    layout === 'ruled'
+    columns === 2
       ? 'grid-cols-1 md:grid-cols-2'
-      : columns === 2
-        ? 'grid-cols-1 md:grid-cols-2'
-        : columns === 4
-          ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'
-          : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+      : columns === 4
+        ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'
+        : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
 
-  // ── Divider color for ruled items ─────────────────────────────────────────
-  const ruledBorderClass = color === 'brand' ? 'border-fg-on-brand/20' : 'border-fg/10'
+  // Ruled rows are paired up front (rather than left to the grid's own
+  // auto-flow) so the zebra tint and hover highlight can be applied to one
+  // element — a single <li> spanning both columns — and read correctly at
+  // every breakpoint, including the single-column mobile layout where the
+  // grid's own 2-up placement no longer applies.
+  const ruledRows: FeatureItem[][] = []
+  if (layout === 'ruled') {
+    for (let i = 0; i < features.length; i += 2) {
+      ruledRows.push(features.slice(i, i + 2))
+    }
+  }
 
   const hasHeader     = eyebrow || heading || subheading
   const hasSectionCta = ctaLabel && ctaUrl
@@ -180,31 +188,44 @@ export default function FeatureGridBlock({
       )}
 
       {/* ── Feature grid ────────────────────────────────────────────────── */}
-      <ul
-        className={cn(
-          'grid',
-          gridColsClass,
-          layout === 'grid' ? 'gap-x-xl gap-y-lg' : 'gap-0',
-        )}
-        role="list"
-      >
-        {features.map((feature, i) => (
-          <li
-            key={i}
-            className={cn(
-              layout === 'ruled' && ['border-t pt-md pb-lg', ruledBorderClass],
-            )}
-          >
-            <FeatureTile
-              feature={feature}
-              styleOptions={{ color, iconStyle, animate }}
-              entered={entered}
-              staggerMs={i * STAGGER_MS}
-              variant={layout === 'grid' ? 'card' : 'bare'}
-            />
-          </li>
-        ))}
-      </ul>
+      {layout === 'ruled' ? (
+        <ul className="flex flex-col" role="list" data-ruled-grid="" data-color={color}>
+          {ruledRows.map((rowFeatures, rowIndex) => (
+            <li
+              key={rowIndex}
+              className="group grid grid-cols-1 md:grid-cols-2 gap-x-xl px-sm -mx-sm pt-md pb-lg"
+              data-ruled-row=""
+              data-color={color}
+              data-zebra={rowIndex % 2 === 1 ? '' : undefined}
+            >
+              {rowFeatures.map((feature, colIndex) => (
+                <FeatureTile
+                  key={colIndex}
+                  feature={feature}
+                  styleOptions={{ color, iconStyle, animate }}
+                  entered={entered}
+                  staggerMs={(rowIndex * 2 + colIndex) * STAGGER_MS}
+                  variant="bare"
+                />
+              ))}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <ul className={cn('grid', gridColsClass, 'gap-x-xl gap-y-lg')} role="list">
+          {features.map((feature, i) => (
+            <li key={i}>
+              <FeatureTile
+                feature={feature}
+                styleOptions={{ color, iconStyle, animate }}
+                entered={entered}
+                staggerMs={i * STAGGER_MS}
+                variant="card"
+              />
+            </li>
+          ))}
+        </ul>
+      )}
 
       {/* ── Section CTA ─────────────────────────────────────────────────── */}
       {hasSectionCta && (

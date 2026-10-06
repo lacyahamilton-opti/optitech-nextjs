@@ -4,6 +4,7 @@ import { RichText } from '@optimizely/cms-sdk/react/richText'
 import { OT_FooterBlock as OT_FooterBlockContentType } from '@/cms/content-types/OT_FooterBlock'
 import Image from 'next/image'
 import Link from 'next/link'
+import { richTextJson } from '@/lib/richTextJson'
 
 type Props = {
   content: ContentProps<typeof OT_FooterBlockContentType>
@@ -20,7 +21,7 @@ type Props = {
 export default function OT_FooterBlockAdapter({ content }: Props) {
   const { pa, src } = getPreviewUtils(content)
 
-  const descriptionJson            = content.description?.json ?? undefined
+  const descriptionJson            = richTextJson(content.description)
   const logoSrc:  string | null   = src(content.footerLogo) ?? null
   const logoSize: string          = (content.footerLogoSize as string | undefined) ?? 'md'
   const logoInvert: boolean       = content.footerLogoInvertDark === true

@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<rss version="2.0"><channel><title>t</title>
+<item>
+  <title>Same title as summary</title>
+  <link>https://example.com/one</link>
+  <description>Same title as summary</description>
+  <pubDate>Mon, 28 Sep 2026 10:00:00 +0000</pubDate>
+</item>
+<item>
+  <title>
+     Leading newline title &#8230; with entity
+  </title>
+  <link>https://example.com/two</link>
+  <description>A short text-only description with no picture at all.</description>
+  <pubDate>Tue, 29 Sep 2026 10:30:00 GMT</pubDate>
+</item>
+<item>
+  <title>Undated item</title>
+  <link>https://example.com/three</link>
+  <description>No date here.</description>
+  <pubDate>not a date</pubDate>
+</item>
+<item>
+  <title>Duplicate of two (same link)</title>
+  <link>https://example.com/two?utm_campaign=x</link>
+  <pubDate>Tue, 29 Sep 2026 10:30:00 GMT</pubDate>
+</item>
+</channel></rss>

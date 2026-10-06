@@ -1,16 +1,19 @@
 'use client'
 
 import {
-  useCallback, useEffect, useRef, useState,
+  useCallback, useEffect, useMemo, useRef, useState,
   forwardRef, type HTMLAttributes,
 } from 'react'
 import { usePathname } from 'next/navigation'
-import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
-import { CATEGORIES } from './config'
+import { ChevronDown, Search, X } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { CATEGORIES, type ShowcaseItem } from './config'
 
 // ─── EdgeFadeScroller ─────────────────────────────────────────────────────────
-// A horizontal scroll lane that signals overflow with a soft edge fade.
-// forwardRef lets ShowcaseNav call .scrollBy() for the chevron buttons.
+// A horizontal scroll lane that signals overflow with a soft edge fade. Used
+// by the tier-1 category tabs, which stay a simple scroller since there are
+// only ever a handful of categories. Tier-2 (the per-category item list) has
+// its own mega-menu below instead — see ShowcaseNav.
 
 const FADE = '2.5rem'
 
@@ -90,50 +93,98 @@ const EdgeFadeScroller = forwardRef<HTMLDivElement, EdgeScrollerProps>(
 export default function ShowcaseNav() {
   const pathname  = usePathname()
   const [query, setQuery] = useState('')
-  const tier2Ref  = useRef<HTMLDivElement>(null)
-
-  // Track tier-2 overflow so chevrons only appear when there's content to reach.
-  const [tier2Edges, setTier2Edges] = useState({ start: true, end: true })
+  const [menuOpen, setMenuOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   const activeCategory = CATEGORIES.find(c => pathname.startsWith(c.match)) ?? null
   const allItems       = activeCategory?.items ?? []
   const hasSubItems    = allItems.length > 0
 
-  // Filter within the active category. Empty query → show all.
-  const q = query.trim().toLowerCase()
-  const filteredItems = q
-    ? allItems.filter(item => item.label.toLowerCase().includes(q))
-    : allItems
+  function itemHrefFor(item: ShowcaseItem) {
+    return item.href ?? `/showcase/${activeCategory!.slug}/${item.slug}`
+  }
+  function isItemActive(item: ShowcaseItem) {
+    return !item.href && pathname.startsWith(itemHrefFor(item))
+  }
 
-  // Clear search when the user switches categories.
-  useEffect(() => { setQuery('') }, [activeCategory?.slug])
+  const currentItem = allItems.find(isItemActive) ?? null
 
-  // Track tier-2 scroll position to drive chevron visibility.
-  const updateTier2Edges = useCallback(() => {
-    const el = tier2Ref.current
-    if (!el) return
-    const max = el.scrollWidth - el.clientWidth
-    setTier2Edges({ start: el.scrollLeft <= 1, end: el.scrollLeft >= max - 1 })
-  }, [])
+  // Clear search when the user switches categories, and close the menu on
+  // any navigation (covers clicks on plain <a> tags, which don't go through
+  // a single shared onClick) — adjusted during render rather than in an
+  // effect, since both are pure reactions to a prop (pathname) changing, not
+  // a synchronization with an external system.
+  const [prevCategorySlug, setPrevCategorySlug] = useState(activeCategory?.slug)
+  if (prevCategorySlug !== activeCategory?.slug) {
+    setPrevCategorySlug(activeCategory?.slug)
+    setQuery('')
+  }
+  const [prevPathname, setPrevPathname] = useState(pathname)
+  if (prevPathname !== pathname) {
+    setPrevPathname(pathname)
+    setMenuOpen(false)
+  }
 
+  // Close on outside click / Escape.
   useEffect(() => {
-    const el = tier2Ref.current
-    if (!el) return
-    updateTier2Edges()
-    el.addEventListener('scroll', updateTier2Edges, { passive: true })
-    const ro = new ResizeObserver(updateTier2Edges)
-    ro.observe(el)
-    return () => { el.removeEventListener('scroll', updateTier2Edges); ro.disconnect() }
-  }, [updateTier2Edges, hasSubItems])
+    if (!menuOpen) return
+    function onPointerDown(e: PointerEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setMenuOpen(false)
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [menuOpen])
 
-  // Re-check edges when the filtered list changes length (overflow may shift).
-  useEffect(() => { updateTier2Edges() }, [filteredItems.length, updateTier2Edges])
+  const q = query.trim().toLowerCase()
+  const matches = useCallback((item: ShowcaseItem) => item.label.toLowerCase().includes(q), [q])
 
-  function scrollTier2(dir: 1 | -1) {
-    const el = tier2Ref.current
-    if (!el) return
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    el.scrollBy({ left: dir * 200, behavior: reduce ? 'auto' : 'smooth' })
+  // Categories that tag every item with a `group` (currently just Blocks) get
+  // the grouped mega-menu, alphabetical within each group, groups in their
+  // first-appearance order in config.ts. Categories that don't (Pages,
+  // Layout, Theme) keep their original array order — Theme's items in
+  // particular are ordered to match the playground's own section order.
+  const hasGroups = allItems.some(item => item.group)
+
+  const groupedSections = useMemo(() => {
+    if (!hasGroups) return []
+    const order: string[] = []
+    const byGroup = new Map<string, ShowcaseItem[]>()
+    for (const item of allItems) {
+      const g = item.group ?? 'Other'
+      if (!byGroup.has(g)) { byGroup.set(g, []); order.push(g) }
+      byGroup.get(g)!.push(item)
+    }
+    return order
+      .map(g => ({ name: g, items: [...byGroup.get(g)!].filter(matches).sort((a, b) => a.label.localeCompare(b.label)) }))
+      .filter(g => g.items.length > 0)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allItems, hasGroups, q])
+
+  const flatItems = hasGroups ? [] : allItems.filter(matches)
+  const totalMatches = hasGroups ? groupedSections.reduce((n, g) => n + g.items.length, 0) : flatItems.length
+
+  function ItemLink({ item }: { item: ShowcaseItem }) {
+    const isActive = isItemActive(item)
+    return (
+      <a
+        href={itemHrefFor(item)}
+        aria-current={isActive ? 'page' : undefined}
+        onClick={() => setMenuOpen(false)}
+        className={cn(
+          'block px-2 py-1 rounded text-label font-medium truncate transition-colors duration-150 ease-quick',
+          isActive ? 'bg-brand text-fg-on-brand' : 'text-fg-muted hover:text-fg hover:bg-fg/6',
+        )}
+      >
+        {item.label}
+      </a>
+    )
   }
 
   return (
@@ -172,13 +223,12 @@ export default function ShowcaseNav() {
         })}
       </EdgeFadeScroller>
 
-      {/* ── Filter + Tier 2 ───────────────────────────────────────────────── */}
+      {/* ── Tier 2: filter + mega-menu trigger ───────────────────────────── */}
       {hasSubItems && (
-        <>
-          {/* Search/filter row — sits between category tabs and item chips */}
-          <div className="px-md py-2 border-b border-fg/10">
+        <div ref={containerRef} className="relative border-b border-fg/10">
+          <div className="flex items-center gap-sm px-md py-2">
             <div className={[
-              'flex items-center gap-sm rounded border px-sm py-1.5',
+              'flex-1 flex items-center gap-sm rounded border px-sm py-1.5',
               'bg-fg/4 border-fg/15',
               'focus-within:border-brand/50 focus-within:bg-brand/3',
               'transition-colors duration-150 ease-quick',
@@ -187,7 +237,8 @@ export default function ShowcaseNav() {
               <input
                 type="text"
                 value={query}
-                onChange={e => setQuery(e.target.value)}
+                onChange={e => { setQuery(e.target.value); setMenuOpen(true) }}
+                onFocus={() => setMenuOpen(true)}
                 placeholder={`Filter ${allItems.length} ${activeCategory?.label.toLowerCase() ?? 'items'}…`}
                 aria-label="Filter showcase items"
                 className="flex-1 min-w-0 bg-transparent text-label text-fg placeholder:text-fg-muted/50 outline-none"
@@ -195,7 +246,7 @@ export default function ShowcaseNav() {
               {query && (
                 <>
                   <span className="text-label tabular-nums text-fg-muted/50 shrink-0 font-mono">
-                    {filteredItems.length}/{allItems.length}
+                    {totalMatches}/{allItems.length}
                   </span>
                   <button
                     onClick={() => setQuery('')}
@@ -207,79 +258,56 @@ export default function ShowcaseNav() {
                 </>
               )}
             </div>
-          </div>
 
-          {/* Item chip row with desktop scroll chevrons */}
-          <div className="relative flex items-stretch border-b border-fg/8">
-
-            {/* Left chevron — desktop only, fades when at the start */}
             <button
-              onClick={() => scrollTier2(-1)}
-              aria-hidden
-              tabIndex={-1}
+              type="button"
+              onClick={() => setMenuOpen(o => !o)}
+              aria-expanded={menuOpen}
+              aria-haspopup="true"
               className={[
-                'hidden md:flex items-center justify-center shrink-0',
-                'w-7 border-r border-fg/8 bg-canvas/92',
-                'text-fg-muted hover:text-fg transition-colors duration-100 ease-quick',
-                tier2Edges.start ? 'opacity-20 pointer-events-none' : 'opacity-100',
+                'flex items-center gap-xs shrink-0 pl-sm pr-2.5 py-1.5 rounded border',
+                'text-label font-semibold tracking-label uppercase',
+                'transition-colors duration-150 ease-quick',
+                menuOpen
+                  ? 'border-brand/50 bg-brand/8 text-fg'
+                  : 'border-fg/15 bg-fg/4 text-fg hover:bg-fg/8',
               ].join(' ')}
             >
-              <ChevronLeft size={13} />
+              <span className="max-w-40 truncate">{currentItem?.label ?? 'Browse all'}</span>
+              <span className="font-normal normal-case tracking-normal text-fg-muted/50">({allItems.length})</span>
+              <ChevronDown size={13} className={cn('transition-transform duration-150 ease-quick', menuOpen && 'rotate-180')} aria-hidden />
             </button>
+          </div>
 
-            <EdgeFadeScroller
-              ref={tier2Ref}
-              scrollKey={pathname + '|' + q}
-              className="flex-1 flex items-center gap-xs px-md py-2.25"
-              style={{ scrollSnapType: 'x proximity' } as React.CSSProperties}
+          {menuOpen && (
+            <div
+              role="menu"
+              aria-label={`${activeCategory?.label ?? 'Items'} list`}
+              className="absolute inset-x-0 top-full z-30 max-h-[75vh] overflow-y-auto border-b border-fg/10 bg-canvas shadow-lg p-md lg:p-lg"
             >
-              {filteredItems.length === 0 ? (
-                <span className="text-label italic text-fg-muted/35 select-none py-0.5">
-                  No matches
-                </span>
+              {totalMatches === 0 ? (
+                <p className="text-label italic text-fg-muted/35 select-none py-0.5">No matches</p>
+              ) : hasGroups ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-lg">
+                  {groupedSections.map(section => (
+                    <div key={section.name}>
+                      <p className="text-label tracking-label uppercase text-fg-muted/60 font-semibold mb-xs">
+                        {section.name}
+                      </p>
+                      <div className="flex flex-col gap-0.5 -mx-2">
+                        {section.items.map(item => <ItemLink key={item.slug} item={item} />)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : (
-                filteredItems.map(item => {
-                  const itemHref = item.href ?? `/showcase/${activeCategory!.slug}/${item.slug}`
-                  const isActive = !item.href && pathname.startsWith(itemHref)
-                  return (
-                    <a
-                      key={item.slug}
-                      href={itemHref}
-                      aria-current={isActive ? 'page' : undefined}
-                      style={{ scrollSnapAlign: 'start' } as React.CSSProperties}
-                      className={[
-                        'shrink-0 px-2.5 py-1.25',
-                        'text-label font-semibold tracking-label uppercase whitespace-nowrap',
-                        'transition-colors duration-150 ease-quick',
-                        isActive
-                          ? 'bg-brand text-fg-on-brand'
-                          : 'text-fg-muted hover:text-fg hover:bg-fg/5',
-                      ].join(' ')}
-                    >
-                      {item.label}
-                    </a>
-                  )
-                })
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-lg gap-y-0.5 -mx-2">
+                  {flatItems.map(item => <ItemLink key={item.slug} item={item} />)}
+                </div>
               )}
-            </EdgeFadeScroller>
-
-            {/* Right chevron — desktop only, fades when at the end */}
-            <button
-              onClick={() => scrollTier2(1)}
-              aria-hidden
-              tabIndex={-1}
-              className={[
-                'hidden md:flex items-center justify-center shrink-0',
-                'w-7 border-l border-fg/8 bg-canvas/92',
-                'text-fg-muted hover:text-fg transition-colors duration-100 ease-quick',
-                tier2Edges.end ? 'opacity-20 pointer-events-none' : 'opacity-100',
-              ].join(' ')}
-            >
-              <ChevronRight size={13} />
-            </button>
-
-          </div>
-        </>
+            </div>
+          )}
+        </div>
       )}
 
     </nav>

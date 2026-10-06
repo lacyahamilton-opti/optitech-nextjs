@@ -3,6 +3,7 @@ import { getPreviewUtils } from '@optimizely/cms-sdk/react/server'
 import { OT_PrimaryTextBlock as OT_PrimaryTextBlockContentType } from '@/cms/content-types/OT_PrimaryTextBlock'
 import { getPrimaryTextStyles } from '@/cms/styling/OT_PrimaryTextBlock.styling'
 import PrimaryTextBlock from '@/components/blocks/PrimaryTextBlock'
+import { richTextJson } from '@/lib/richTextJson'
 
 type Props = {
   content: ContentProps<typeof OT_PrimaryTextBlockContentType>
@@ -24,7 +25,7 @@ export default function OT_PrimaryTextBlock({ content, displaySettings = {} }: P
         eyebrow={content.eyebrow ?? undefined}
         headline={content.headline ?? ''}
         headingLevel={(content.headingLevel as 'h1' | 'h2' | undefined) ?? 'h2'}
-        body={content.body?.json ?? undefined}
+        body={richTextJson(content.body)}
         styleOptions={styleOptions}
         pa={pa}
       />

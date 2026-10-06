@@ -4,6 +4,7 @@ import { RichText } from '@optimizely/cms-sdk/react/richText'
 import { OT_Author as OT_AuthorContentType } from '@/cms/content-types/OT_Author'
 import Image from 'next/image'
 import { User } from 'lucide-react'
+import { richTextJson } from '@/lib/richTextJson'
 
 type Props = {
   content: ContentProps<typeof OT_AuthorContentType>
@@ -27,7 +28,7 @@ export default function OT_Author({ content }: Props) {
   const photoUrl = content.photo?.url?.default ?? undefined
   const name     = content.name ?? ''
   const role     = content.role ?? ''
-  const bioJson  = content.bio?.json ?? undefined
+  const bioJson  = richTextJson(content.bio)
   const linkedIn = content.linkedIn?.default ?? ''
   const twitter  = content.twitter?.default  ?? ''
   const initials: string = name ? authorInitials(name) : ''

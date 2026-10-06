@@ -17,7 +17,9 @@ function ensureInitialized() {
   if (initialized) return
   const key = process.env.OPTIMIZELY_GRAPH_SINGLE_KEY
   if (!key) throw new Error('OPTIMIZELY_GRAPH_SINGLE_KEY is not set')
-  config({ apiKey: key })
+  // SDK v3 selects Rich Text as `json` only by default; several adapters still
+  // read `.html` (ImageBlock, VideoBlock, DisclosureBlock, PractitionerProfile).
+  config({ apiKey: key, fragment: { richTextFormat: 'both' } })
   initialized = true
 }
 
@@ -98,9 +100,9 @@ export async function getRequestBaseUrl(): Promise<string> {
 // All fields consumed by layout (theme CSS), Header, and Footer.
 const THEME_QUERY = `
   query GetThemeManagers($locale: [Locales]) {
-    OT_ThemeManager(limit: 100, orderBy: { _metadata: { published: DESC } }) {
+    OT_ThemeManager(limit: 100, locale: $locale, orderBy: { _metadata: { published: DESC } }) {
       items {
-        _metadata { key }
+        _metadata { key locale }
         frontEndDomain
         logo { url { default } }
         logoAlt
@@ -152,7 +154,7 @@ const THEME_QUERY = `
         }
       }
     }
-    OT_FooterBlock(limit: 20, locale: $locale) {
+    OT_FooterBlock(limit: 40, locale: $locale, orderBy: { _metadata: { published: DESC } }) {
       items {
         _metadata { key locale }
         footerStyle
@@ -332,35 +334,52 @@ function applyLinkResolution(
   return key ? (resolved.get(key) ?? url) : url
 }
 
+type LocaleVersioned = { _metadata?: { key?: string | null; locale?: string | null } | null }
+
+/**
+ * Collapses Graph results to one item per content key, preferring the requested
+ * locale and falling back to the default locale. Input must be ordered
+ * published DESC so the first match per key/locale is the latest version.
+ * Shared (non-localized) properties are identical across locale versions, so a
+ * missing translation still yields the full theme — only translated copy falls back.
+ */
+function pickLocaleVersions<T extends LocaleVersioned>(items: T[], locale: string): T[] {
+  const wanted = locale.toLowerCase()
+  const byKey  = new Map<string, T>()
+  for (const item of items) {
+    const key = item._metadata?.key
+    if (!key) continue
+    const itemLocale = (item._metadata?.locale ?? '').toLowerCase()
+    const current    = byKey.get(key)
+    if (!current) { byKey.set(key, item); continue }
+    const currentLocale = (current._metadata?.locale ?? '').toLowerCase()
+    if (currentLocale !== wanted && itemLocale === wanted) byKey.set(key, item)
+  }
+  return [...byKey.values()]
+}
+
 // One Graph fetch per request per locale; layout, Header, and Footer all share this cache.
 // React cache() memoizes by argument so each locale gets its own cached result.
-// Content Graph returns all published versions of each item. We deduplicate by
-// content key so each ThemeManager item appears only once (latest version first,
-// guaranteed by orderBy published DESC in the query).
+// Content Graph returns all published versions of each item in both the requested
+// and default locales; pickLocaleVersions reduces that to one item per content key.
 const _fetchAllThemeManagers = cache(async function fetchAllThemeManagers(locale: string) {
   try {
-    const data  = await getClient().request(THEME_QUERY, { locale: [locale] })
+    const locales = [...new Set([locale, DEFAULT_LOCALE])]
+    const data  = await getClient().request(THEME_QUERY, { locale: locales })
     const items = (data?.OT_ThemeManager?.items ?? []) as any[]
 
     // Build a key → data map for footer blocks so we can attach them below.
     // ContentReference.item is not resolvable for _component types in Graph —
     // they come back as __typename: "Data". We fetch them as a parallel root
     // query and join by key instead.
-    const footerItems = (data?.OT_FooterBlock?.items ?? []) as any[]
+    const footerItems = pickLocaleVersions((data?.OT_FooterBlock?.items ?? []) as any[], locale)
     const footerMap = new Map<string, any>()
     for (const fb of footerItems) {
       const fk = fb._metadata?.key as string | undefined
       if (fk) footerMap.set(fk, fb)
     }
 
-    const seen  = new Set<string>()
-    const deduped = items
-      .filter((item: any) => {
-        const key = item._metadata?.key as string | undefined
-        if (!key || seen.has(key)) return false
-        seen.add(key)
-        return true
-      })
+    const deduped = pickLocaleVersions(items, locale)
       .map((item: any) => {
         const footerKey = item.footerRef?.key as string | undefined
         const resolvedFooter = footerKey ? footerMap.get(footerKey) ?? null : null

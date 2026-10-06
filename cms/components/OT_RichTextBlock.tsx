@@ -3,6 +3,7 @@ import { getPreviewUtils } from '@optimizely/cms-sdk/react/server'
 import { OT_RichTextBlock as OT_RichTextBlockContentType } from '@/cms/content-types/OT_RichTextBlock'
 import { getRichTextStyles } from '@/cms/styling/OT_RichTextBlock.styling'
 import RichTextBlock from '@/components/blocks/RichTextBlock'
+import { richTextJson } from '@/lib/richTextJson'
 
 type Props = {
   content: ContentProps<typeof OT_RichTextBlockContentType>
@@ -16,7 +17,7 @@ export default function OT_RichTextBlock({ content, displaySettings = {} }: Prop
   return (
     <div {...pa(content.__composition)} className="w-full">
       <RichTextBlock
-        content={content.content?.json ?? undefined}
+        content={richTextJson(content.content)}
         styleOptions={styleOptions}
         pa={pa}
       />

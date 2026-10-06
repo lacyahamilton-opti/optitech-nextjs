@@ -85,9 +85,11 @@ export default function LocationCard({ location, density = 'comfortable', onOpen
           )}
 
           {canOpen && (
-            <span className="btn-signal mt-1 inline-flex w-fit items-center gap-1 rounded-ot-control bg-brand px-sm py-1 text-[0.6875rem] font-semibold uppercase tracking-label text-fg-on-brand opacity-0 transition-opacity duration-300 group-hover:opacity-100 group-focus-visible:opacity-100">
-              View details
-              <ArrowUpRight size={12} strokeWidth={2.5} aria-hidden />
+            <span className="btn-signal mt-1 inline-flex w-fit items-center rounded-ot-control bg-brand px-sm py-1 text-[0.6875rem] font-semibold uppercase tracking-label text-fg-on-brand opacity-0 transition-opacity duration-300 group-hover:opacity-100 group-focus-visible:opacity-100">
+              <span className="relative z-10 inline-flex items-center gap-1">
+                View details
+                <ArrowUpRight size={12} strokeWidth={2.5} aria-hidden />
+              </span>
             </span>
           )}
         </div>

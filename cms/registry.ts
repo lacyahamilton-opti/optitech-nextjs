@@ -39,6 +39,8 @@ import { OT_ProductRecommendationsDefault } from '@/cms/display-templates/OT_Pro
 import { OT_ComparisonTableDefault }        from '@/cms/display-templates/OT_ComparisonTableDefault'
 import { OT_DisclosureBlockDefault }       from '@/cms/display-templates/OT_DisclosureBlockDefault'
 import { OT_TopicHubDefault }             from '@/cms/display-templates/OT_TopicHubDefault'
+import { OT_SliderDefault }               from '@/cms/display-templates/OT_SliderDefault'
+import { OT_IndustryNewsFeedDefault }    from '@/cms/display-templates/OT_IndustryNewsFeedDefault'
 
 // Content type definitions — required at runtime so the SDK's query builder
 // can generate the correct GraphQL fragments for each type
@@ -104,6 +106,9 @@ import { OT_TokenManager }          from '@/cms/content-types/OT_TokenManager'
 import { OT_TopicHubRecommendation } from '@/cms/content-types/OT_TopicHubRecommendation'
 import { OT_TopicHubBucket }         from '@/cms/content-types/OT_TopicHubBucket'
 import { OT_TopicHubPage }           from '@/cms/content-types/OT_TopicHubPage'
+import { OT_SlideItem }              from '@/cms/content-types/OT_SlideItem'
+import { OT_SliderBlock }            from '@/cms/content-types/OT_SliderBlock'
+import { OT_IndustryNewsFeedBlock }  from '@/cms/content-types/OT_IndustryNewsFeedBlock'
 
 // OptiForm content types — built-in Forms for Visual Builder element schemas
 import { OptiFormsContainerData }   from '@/cms/content-types/OptiFormsContainerData'
@@ -163,6 +168,8 @@ import OT_ComparisonTableBlockAdapter        from '@/cms/components/OT_Compariso
 import OT_DisclosureBlockAdapter            from '@/cms/components/OT_DisclosureBlock'
 import OT_TokenManagerAdapter               from '@/cms/components/OT_TokenManager'
 import OT_TopicHubPageAdapter              from '@/cms/components/OT_TopicHubPage'
+import OT_SliderBlockAdapter               from '@/cms/components/OT_SliderBlock'
+import OT_IndustryNewsFeedBlockAdapter     from '@/cms/components/OT_IndustryNewsFeedBlock'
 
 // OptiForm component adapters
 import OptiFormsContainerDataAdapter   from '@/cms/components/OptiFormsContainerData'
@@ -221,6 +228,8 @@ initDisplayTemplateRegistry([
   OT_ComparisonTableDefault,
   OT_DisclosureBlockDefault,
   OT_TopicHubDefault,
+  OT_SliderDefault,
+  OT_IndustryNewsFeedDefault,
 ])
 
 initContentTypeRegistry([
@@ -286,6 +295,9 @@ initContentTypeRegistry([
   OT_TopicHubRecommendation,
   OT_TopicHubBucket,
   OT_TopicHubPage,
+  OT_SlideItem,
+  OT_SliderBlock,
+  OT_IndustryNewsFeedBlock,
   // OptiForm types
   OptiFormsContainerData,
   OptiFormsDependencyRule,
@@ -350,6 +362,8 @@ initReactComponentRegistry({
     OT_DisclosureBlock:             OT_DisclosureBlockAdapter,
     OT_TokenManager:                OT_TokenManagerAdapter,
     OT_TopicHubPage:                OT_TopicHubPageAdapter,
+    OT_SliderBlock:                 OT_SliderBlockAdapter,
+    OT_IndustryNewsFeedBlock:       OT_IndustryNewsFeedBlockAdapter,
     // Preview-only: lets /preview render the shared profile record (not used in compositions)
     OT_PractitionerProfile:      OT_PractitionerProfileAdapter,
     OT_LocationProfile:          OT_LocationProfileAdapter,

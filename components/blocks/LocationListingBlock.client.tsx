@@ -4,8 +4,9 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { usePrefersReducedMotion } from '@/lib/usePrefersReducedMotion'
 import dynamic from 'next/dynamic'
 import {
-  Search, X, Map as MapIcon, LayoutGrid, List, MapPinned, SlidersHorizontal,
+  Search, X, Map as MapIcon, LayoutGrid, List, MapPinned, SlidersHorizontal, Layers,
 } from 'lucide-react'
+import { FilterTriggerButton, FilterDrawer, FilterRadioGroup } from '@/components/ui/FilterDrawer'
 import type { LocationData } from '@/lib/locations'
 import { deriveLabelOptions, hasCoordinates } from '@/lib/locationFormat'
 import type {
@@ -35,6 +36,8 @@ type Props = {
   styleOptions: LocationListingStyleOptions
   mapboxToken:  string
   emptyMessage: string
+  /** True for any CMS draft/preview render — hides the filter trigger + drawer. */
+  isPreview?:   boolean
 }
 
 const GRID_COLS: Record<LocationListingColumns, string> = {
@@ -86,52 +89,9 @@ function ViewToggle({
   )
 }
 
-// ─── Label filter chips ─────────────────────────────────────────────────────────
-// Single-select; "All" is always first. Options derived ONLY from the loaded set
-// (never a fixed list), so the same block serves any vertical.
-
-function LabelChips({
-  options,
-  value,
-  onChange,
-}: {
-  options: string[]
-  value: string | null
-  onChange: (v: string | null) => void
-}) {
-  // Matches the Event block's TypeChip rhythm so filter chips read identically
-  // across the listing family.
-  const chip = (active: boolean) =>
-    'inline-flex items-center whitespace-nowrap text-label font-semibold uppercase tracking-label rounded-ot-control px-sm py-1.25 ' +
-    'border transition-colors duration-150 ease-quick cursor-pointer ' +
-    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ' +
-    (active
-      ? 'bg-brand border-transparent text-fg-on-brand'
-      : 'bg-transparent border-fg/15 text-fg-muted hover:border-fg/30 hover:text-fg')
-
-  return (
-    <div className="flex flex-wrap items-center gap-xs" role="group" aria-label="Filter by label">
-      <button type="button" aria-pressed={value === null} onClick={() => onChange(null)} className={chip(value === null)}>
-        All
-      </button>
-      {options.map(opt => (
-        <button
-          key={opt}
-          type="button"
-          aria-pressed={value === opt}
-          onClick={() => onChange(value === opt ? null : opt)}
-          className={chip(value === opt)}
-        >
-          {opt}
-        </button>
-      ))}
-    </div>
-  )
-}
-
 // ─── Directory client ─────────────────────────────────────────────────────────
 
-export default function LocationListingClient({ locations, styleOptions, mapboxToken, emptyMessage }: Props) {
+export default function LocationListingClient({ locations, styleOptions, mapboxToken, emptyMessage, isPreview = false }: Props) {
   const { defaultView, showViewToggle, mapHeight, color, columns, showSearch, showLabelFilter, density } = styleOptions
 
   const [view, setView]                     = useState<LocationListingView>(defaultView)
@@ -139,8 +99,11 @@ export default function LocationListingClient({ locations, styleOptions, mapboxT
   const [label, setLabel]                   = useState<string | null>(null)
   const [selectedKey, setSelectedKey]       = useState<string | null>(null)
   const [detailsLocation, setDetailsLocation] = useState<LocationData | null>(null)
+  const [filtersOpen, setFiltersOpen]       = useState(false)
   const prefersReducedMotion          = usePrefersReducedMotion()
   const searchId = useId()
+  const filterPanelId    = useId()
+  const filterTriggerRef = useRef<HTMLButtonElement>(null)
 
   const onSurface = color === 'surface'
   const inputBg   = onSurface ? 'bg-canvas' : 'bg-surface'
@@ -192,7 +155,9 @@ export default function LocationListingClient({ locations, styleOptions, mapboxT
     setLabel(null)
   }
 
-  const hasControls = showSearch || (showLabelFilter && labelOptions.length > 0) || showViewToggle
+  // Hidden entirely in CMS preview/edit renders — live-front-end feature only.
+  const showLabelFilterUI = showLabelFilter && labelOptions.length > 0 && !isPreview
+  const hasControls = showSearch || showLabelFilterUI || showViewToggle
   const mappableCount = useMemo(() => results.filter(hasCoordinates).length, [results])
 
   return (
@@ -232,9 +197,15 @@ export default function LocationListingClient({ locations, styleOptions, mapboxT
             )}
           </div>
 
-          {(showLabelFilter && labelOptions.length > 0) && (
+          {showLabelFilterUI && (
             <div className="flex flex-col gap-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-              <LabelChips options={labelOptions} value={label} onChange={setLabel} />
+              <FilterTriggerButton
+                ref={filterTriggerRef}
+                open={filtersOpen}
+                onClick={() => setFiltersOpen(v => !v)}
+                activeCount={label ? 1 : 0}
+                panelId={filterPanelId}
+              />
               <div className="flex items-center gap-md">
                 <p className="font-mono text-xs uppercase tracking-label text-fg-muted/70" aria-live="polite">
                   <span className="text-fg">{results.length}</span>{' '}
@@ -252,15 +223,42 @@ export default function LocationListingClient({ locations, styleOptions, mapboxT
         </div>
       )}
 
+      {showLabelFilterUI && (
+        <FilterDrawer
+          id={filterPanelId}
+          open={filtersOpen}
+          onClose={() => setFiltersOpen(false)}
+          activeCount={label ? 1 : 0}
+          onClearAll={() => setLabel(null)}
+          triggerRef={filterTriggerRef}
+        >
+          <FilterRadioGroup
+            icon={Layers}
+            heading="Label"
+            ariaLabel="Filter by label"
+            value={label}
+            onSelect={setLabel}
+            options={[
+              { value: null as string | null, label: 'All' },
+              ...labelOptions.map(opt => ({ value: opt as string | null, label: opt })),
+            ]}
+          />
+        </FilterDrawer>
+      )}
+
       {/* ── Results ── */}
       {results.length === 0 ? (
         <EmptyState message={emptyMessage} filtersActive={filtersActive} onClear={clearAll} />
       ) : view === 'map' ? (
         <div className="grid gap-md lg:grid-cols-[26rem_1fr]" style={{ ['--map-h' as string]: `${mapPx}px` }}>
-          {/* Rail — below the map on mobile, beside it (scrollable, matched height) on desktop. */}
+          {/* Rail — below the map on mobile, beside it (scrollable, matched height) on desktop.
+              Keyed on the label filter (not the map, which must stay mounted — remounting the
+              Mapbox instance on every filter change would flash the loading skeleton and refetch
+              tiles) so a filter change fades the swapped-in cards in. */}
           <div
+            key={label ?? 'all'}
             ref={railScroll}
-            className="location-rail order-2 flex flex-col gap-sm lg:order-1 lg:h-(--map-h) lg:overflow-y-auto lg:pr-1"
+            className="location-rail order-2 flex flex-col gap-sm lg:order-1 lg:h-(--map-h) lg:overflow-y-auto lg:pr-1 animate-filter-swap"
           >
             {results.map(l => (
               <div key={l.key} ref={el => { railRefs.current.set(l.key, el) }}>
@@ -303,7 +301,7 @@ export default function LocationListingClient({ locations, styleOptions, mapboxT
           </div>
         </div>
       ) : view === 'list' ? (
-        <ul className={`flex flex-col ${density === 'compact' ? 'gap-sm' : 'gap-md'}`}>
+        <ul key={label ?? 'all'} className={`flex flex-col animate-filter-swap ${density === 'compact' ? 'gap-sm' : 'gap-md'}`}>
           {results.map(l => (
             <li key={l.key}>
               <LocationListRow location={l} onSurface={onSurface} density={density} onOpenDetails={setDetailsLocation} />
@@ -311,7 +309,7 @@ export default function LocationListingClient({ locations, styleOptions, mapboxT
           ))}
         </ul>
       ) : (
-        <ul className={`grid grid-cols-1 ${GRID_COLS[columns]} ${density === 'compact' ? 'gap-sm' : 'gap-md'}`}>
+        <ul key={label ?? 'all'} className={`grid grid-cols-1 animate-filter-swap ${GRID_COLS[columns]} ${density === 'compact' ? 'gap-sm' : 'gap-md'}`}>
           {results.map(l => (
             <li key={l.key} className="flex">
               <LocationCard location={l} density={density} onOpenDetails={setDetailsLocation} />
@@ -340,9 +338,9 @@ function EmptyState({ message, filtersActive, onClear }: { message: string; filt
         <button
           type="button"
           onClick={onClear}
-          className="btn-signal mt-xs inline-flex items-center gap-xs rounded-ot-control bg-brand text-fg-on-brand px-md py-sm text-label uppercase tracking-label font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+          className="btn-signal mt-xs inline-flex items-center rounded-ot-control bg-brand text-fg-on-brand px-md py-sm text-label uppercase tracking-label font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
         >
-          Clear search &amp; filters
+          <span className="relative z-10">Clear search &amp; filters</span>
         </button>
       )}
     </div>

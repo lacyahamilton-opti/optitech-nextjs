@@ -24,8 +24,9 @@ export type FeatureTileStyleOptions = {
   color?:     'canvas' | 'surface' | 'brand'
   /**
    * none:       Icons hidden regardless of slot configuration.
-   * accent:     Small icon (18px) inline before the headline.
-   * structural: Medium icon (32px) above the headline, slightly muted.
+   * accent:     Icon (32px, bold stroke) to the left of the headline and
+   *             body, vertically centered across both.
+   * structural: Icon (36px) in a tinted tile above the headline.
    */
   iconStyle?: 'none' | 'accent' | 'structural'
   animate?:   boolean
@@ -166,8 +167,9 @@ export default function FeatureTile({
     return () => observer.disconnect()
   }, [animate, prefersReducedMotion, isControlled])
 
-  const Icon     = feature.icon ? ICONS[feature.icon] : null
-  const showIcon = iconStyle !== 'none' && !!Icon
+  const Icon           = feature.icon ? ICONS[feature.icon] : null
+  const showIcon       = iconStyle !== 'none' && !!Icon
+  const showAccentIcon = showIcon && iconStyle === 'accent'
 
   const itemStyle: React.CSSProperties = shouldAnim
     ? {
@@ -181,6 +183,30 @@ export default function FeatureTile({
           : 'none',
       }
     : {}
+
+  const textBlock = (
+    <>
+      <h3 className={featureHeadlineCva({ color })}>{feature.headline}</h3>
+
+      {feature.body && (
+        <div className={featureBodyCva({ color })}>
+          <RichText content={feature.body} />
+        </div>
+      )}
+
+      {feature.ctaLabel && feature.ctaUrl && (
+        <a href={feature.ctaUrl} className={featureCtaCva({ color })}>
+          {feature.ctaLabel}
+          <ArrowUpRight
+            size={12}
+            strokeWidth={2.5}
+            aria-hidden="true"
+            className="motion-safe:transition-transform motion-safe:duration-150 motion-safe:ease-quick motion-safe:group-hover:translate-x-0.5 motion-safe:group-hover:-translate-y-0.5"
+          />
+        </a>
+      )}
+    </>
+  )
 
   return (
     <div
@@ -200,38 +226,27 @@ export default function FeatureTile({
         <span
           aria-hidden="true"
           className={cn(
-            'inline-flex items-center justify-center w-10 h-10 mb-md rounded-ot-control',
+            'inline-flex items-center justify-center w-16 h-16 mb-md rounded-ot-control motion-safe:transition-transform motion-safe:duration-150 motion-safe:ease-quick motion-safe:group-hover:scale-110',
             color === 'brand' ? 'bg-fg-on-brand/10' : 'bg-fg/8',
             iconCva({ color }),
           )}
         >
-          <Icon size={20} strokeWidth={1.5} />
+          <Icon size={36} strokeWidth={1.75} />
         </span>
       )}
 
-      <div className={cn(showIcon && iconStyle === 'accent' && 'flex items-start gap-xs')}>
-        {showIcon && iconStyle === 'accent' && (
+      {showAccentIcon ? (
+        <div className="flex items-center gap-md">
           <span
             aria-hidden="true"
-            className={cn(iconCva({ color }), 'mt-[0.2em] flex-shrink-0')}
+            className={cn('inline-flex motion-safe:transition-transform motion-safe:duration-150 motion-safe:ease-quick motion-safe:group-hover:scale-110', iconCva({ color }))}
           >
-            <Icon size={16} strokeWidth={2} />
+            <Icon size={32} strokeWidth={2.25} />
           </span>
-        )}
-        <h3 className={featureHeadlineCva({ color })}>{feature.headline}</h3>
-      </div>
-
-      {feature.body && (
-        <div className={featureBodyCva({ color })}>
-          <RichText content={feature.body} />
+          <div className="min-w-0 flex-1">{textBlock}</div>
         </div>
-      )}
-
-      {feature.ctaLabel && feature.ctaUrl && (
-        <a href={feature.ctaUrl} className={featureCtaCva({ color })}>
-          {feature.ctaLabel}
-          <ArrowUpRight size={12} strokeWidth={2.5} aria-hidden="true" />
-        </a>
+      ) : (
+        textBlock
       )}
     </div>
   )

@@ -3,6 +3,7 @@ import { getPreviewUtils }                                from '@optimizely/cms-
 import { OT_FeatureGridBlock as OT_FeatureGridBlockContentType } from '@/cms/content-types/OT_FeatureGridBlock'
 import { getFeatureGridStyles, getFeatureGridIcons }      from '@/cms/styling/OT_FeatureGridBlock.styling'
 import FeatureGridBlock, { type FeatureItem }             from '@/components/blocks/FeatureGridBlock'
+import { richTextJson } from '@/lib/richTextJson'
 
 type Props = {
   content:          ContentProps<typeof OT_FeatureGridBlockContentType>
@@ -31,7 +32,7 @@ function buildFeatures(content: any): Omit<FeatureItem, 'icon'>[] {
       .filter(item => item?.headline)
       .map(item => ({
         headline: String(item.headline),
-        body:     item.body?.json ?? undefined,
+        body:     richTextJson(item.body),
         ctaLabel: item.ctaLabel ? String(item.ctaLabel) : undefined,
         ctaUrl:   resolveUrl(item.ctaUrl),
       }))

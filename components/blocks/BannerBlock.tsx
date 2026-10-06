@@ -5,6 +5,7 @@ import { cn }  from '@/lib/utils'
 import { RichText } from '@optimizely/cms-sdk/react/richText'
 import BannerEntrance from './BannerEntrance'
 import BannerBackgroundVideo from './BannerBackgroundVideo'
+import { OT_COLOR_FILL_CLASS } from '@/lib/colorTokens'
 
 // ─── Style option types ───────────────────────────────────────────────────────
 
@@ -178,14 +179,7 @@ function getScrimClass(
   // (covers both `scrim` and `none` — with nothing behind it to preserve
   // "as-is", `none` renders the same flat fill as `scrim`).
   if (!hasMedia) {
-    const solid: Record<string, string> = {
-      canvas:    'bg-canvas',
-      surface:   'bg-surface',
-      brand:     'bg-brand',
-      brandDeep: 'bg-brand-hover',
-      accent:    'bg-accent',
-    }
-    return solid[color] ?? 'bg-canvas'
+    return OT_COLOR_FILL_CLASS[color as keyof typeof OT_COLOR_FILL_CLASS] ?? OT_COLOR_FILL_CLASS.canvas
   }
   // Colored overlay over an image or video (treatment === 'scrim').
   const isMultiply = imageBlend === 'multiply'

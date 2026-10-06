@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useMemo, useCallback, useEffect } from 'react'
-import { LayoutGrid, List, ChevronRight, ExternalLink } from 'lucide-react'
+import { useState, useMemo, useCallback, useEffect, useId, useRef } from 'react'
+import { LayoutGrid, List, ChevronRight, ExternalLink, Tag } from 'lucide-react'
 import type { BlogFeedPost } from '@/lib/blogFeed'
 import Pagination from '@/components/ui/Pagination'
+import { FilterTriggerButton, FilterDrawer, FilterPillGroup } from '@/components/ui/FilterDrawer'
 import { usePrefersReducedMotion } from '@/lib/usePrefersReducedMotion'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -37,6 +38,21 @@ function isExternalUrl(url: string, mounted: boolean): boolean {
   if (!mounted || !url.startsWith('http')) return false
   try { return new URL(url).origin !== window.location.origin }
   catch { return false }
+}
+
+// ─── TopicPill ────────────────────────────────────────────────────────────────
+// The solid accent-fill badge already established for editorial category labels
+// (see the Hero Spotlight eyebrow and StoryRailSlide's corner tag) — a deliberate
+// exception to the system's sharp-corner default, reserved for this one kind of
+// label. Fixed fill + fixed on-accent text, so it reads the same on any
+// background (canvas, brand panel, or image) without a conditional per view.
+
+function TopicPill({ label }: { label: string }) {
+  return (
+    <span className="inline-flex w-fit items-center rounded-full bg-accent px-sm py-1 text-label font-semibold uppercase tracking-label text-fg-on-accent">
+      {label}
+    </span>
+  )
 }
 
 // ─── BlogCard ─────────────────────────────────────────────────────────────────
@@ -76,13 +92,8 @@ function BlogCard({ post, onBrand, mounted }: { post: BlogFeedPost; onBrand: boo
       {/* Body */}
       <div className="px-md pt-md pb-lg">
         {topic && (
-          <div className="mb-sm flex items-center gap-xs">
-            <span className="block w-1.5 h-1.5 bg-accent flex-none" aria-hidden />
-            <span className={`text-label uppercase tracking-label font-semibold ${
-              onBrand ? 'text-fg-on-brand/80' : 'text-accent'
-            }`}>
-              {topicLabel(topic)}
-            </span>
+          <div className="mb-sm">
+            <TopicPill label={topicLabel(topic)} />
           </div>
         )}
         <h3 className={`text-title leading-title font-semibold text-balance line-clamp-3 ${
@@ -118,8 +129,8 @@ function BlogListRow({ post, onBrand, mounted }: { post: BlogFeedPost; onBrand: 
   const author    = post.authorRef?.name
   const external  = isExternalUrl(postUrl, mounted)
 
-  const borderClass   = onBrand ? 'border-fg-on-brand/15'  : 'border-fg/8'
-  const topicClass    = onBrand ? 'text-fg-on-brand/70'    : 'text-accent'
+  const borderClass   = onBrand ? 'border-fg-on-brand/12'  : 'border-fg/8'
+  const hoverClass    = onBrand ? 'hover:border-fg-on-brand/35 hover:bg-fg/6' : 'hover:border-brand/50 hover:bg-brand/4'
   const headlineClass = onBrand ? 'text-fg-on-brand'       : 'text-fg'
   const metaClass     = onBrand ? 'text-fg-on-brand/55'    : 'text-fg-muted'
   const arrowClass    = onBrand ? 'text-fg-on-brand/40 group-hover:text-fg-on-brand' : 'text-fg-muted/40 group-hover:text-brand'
@@ -129,7 +140,7 @@ function BlogListRow({ post, onBrand, mounted }: { post: BlogFeedPost; onBrand: 
       href={postUrl}
       target={external ? '_blank' : undefined}
       rel={external ? 'noopener noreferrer' : undefined}
-      className={`group flex items-center gap-md py-md border-b last:border-b-0 ${borderClass}
+      className={`group flex items-center gap-md p-sm sm:p-md rounded-ot-surface border ${borderClass} ${hoverClass}
         transition-colors duration-150 ease-quick
         focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand`}
     >
@@ -147,27 +158,13 @@ function BlogListRow({ post, onBrand, mounted }: { post: BlogFeedPost; onBrand: 
         </div>
       )}
 
-      {/* Topic column — desktop only */}
-      <div className="hidden sm:flex items-center gap-xs w-32.5 shrink-0">
-        {topic ? (
-          <>
-            <span className="block w-1.5 h-1.5 bg-accent flex-none" aria-hidden />
-            <span className={`text-label uppercase tracking-label font-semibold truncate ${topicClass}`}>
-              {topicLabel(topic)}
-            </span>
-          </>
-        ) : null}
-      </div>
-
-      {/* Content */}
+      {/* Content — topic pill sits directly above the headline it labels, at
+          every breakpoint, instead of a separate desktop column disconnected
+          from the copy it describes. */}
       <div className="flex-1 min-w-0">
-        {/* Mobile-only topic tag */}
         {topic && (
-          <div className="sm:hidden flex items-center gap-xs mb-xs">
-            <span className="block w-1.5 h-1.5 bg-accent flex-none" aria-hidden />
-            <span className={`text-label uppercase tracking-label font-semibold ${topicClass}`}>
-              {topicLabel(topic)}
-            </span>
+          <div className="mb-xs">
+            <TopicPill label={topicLabel(topic)} />
           </div>
         )}
         <h3 className={`text-title leading-title font-semibold text-balance group-hover:underline decoration-fg/20 underline-offset-2 ${headlineClass}`}>
@@ -182,7 +179,7 @@ function BlogListRow({ post, onBrand, mounted }: { post: BlogFeedPost; onBrand: 
       </div>
 
       {/* Arrow / external indicator */}
-      <div className={`hidden sm:flex items-center shrink-0 transition-transform duration-150 group-hover:translate-x-0.5 ${arrowClass}`}
+      <div className={`hidden sm:flex items-center shrink-0 transition-transform duration-150 group-hover:translate-x-1 ${arrowClass}`}
            aria-label={external ? 'Opens in a new tab' : undefined}>
         {external
           ? <ExternalLink size={16} strokeWidth={1.75} />
@@ -190,41 +187,6 @@ function BlogListRow({ post, onBrand, mounted }: { post: BlogFeedPost; onBrand: 
         }
       </div>
     </a>
-  )
-}
-
-// ─── TopicChip ────────────────────────────────────────────────────────────────
-
-function TopicChip({
-  label,
-  active,
-  onBrand,
-  onClick,
-}: {
-  label:   string
-  active:  boolean
-  onBrand: boolean
-  onClick: () => void
-}) {
-  const base = 'rounded-ot-control text-label uppercase tracking-label font-semibold px-sm py-[5px] border transition-colors duration-150 ease-quick cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand'
-
-  const variant = active
-    ? (onBrand
-        ? 'bg-fg/25 border-fg-on-brand/50 text-fg-on-brand'
-        : 'bg-brand border-transparent text-fg-on-brand')
-    : (onBrand
-        ? 'bg-fg/8 border-fg-on-brand/20 text-fg-on-brand/65 hover:bg-fg/15 hover:text-fg-on-brand'
-        : 'bg-transparent border-fg/15 text-fg-muted hover:border-fg/30 hover:text-fg')
-
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      className={`${base} ${variant}`}
-    >
-      {label}
-    </button>
   )
 }
 
@@ -268,6 +230,8 @@ export type BlogFeedClientProps = {
   anchorId:    string
   /** Initial view mode — set by the CMS editor; visitor can still toggle */
   defaultView?: 'grid' | 'list'
+  /** True for any CMS draft/preview render — hides the filter trigger + drawer. */
+  isPreview?:   boolean
 }
 
 type View = 'grid' | 'list'
@@ -281,12 +245,16 @@ export default function BlogFeedClient({
   onBrand,
   anchorId,
   defaultView = 'grid',
+  isPreview   = false,
 }: BlogFeedClientProps) {
   const [view,        setView]   = useState<View>(defaultView)
   const [activeTopic, setTopic]  = useState<string | null>(null)
   const [page,        setPage]   = useState(1)
   const [mounted,     setMounted] = useState(false)
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const prefersReducedMotion      = usePrefersReducedMotion()
+  const filterTriggerRef = useRef<HTMLButtonElement>(null)
+  const filterPanelId    = useId()
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -330,25 +298,16 @@ export default function BlogFeedClient({
       {/* ── Controls bar ────────────────────────────────────────────────────── */}
       <div className={`flex flex-wrap items-center justify-between gap-sm pb-lg mb-lg border-b ${dividerClass}`}>
 
-        {/* Topic filter chips — hidden when the CMS has locked the feed to a single topic */}
-        {!topicFilter && (
-          <div className="flex flex-wrap items-center gap-xs" role="group" aria-label="Filter by topic">
-            <TopicChip
-              label="All"
-              active={activeTopic === null}
-              onBrand={onBrand}
-              onClick={() => changeTopic(null)}
-            />
-            {topics.map(t => (
-              <TopicChip
-                key={t}
-                label={topicLabel(t)}
-                active={activeTopic === t}
-                onBrand={onBrand}
-                onClick={() => changeTopic(activeTopic === t ? null : t)}
-              />
-            ))}
-          </div>
+        {/* Filters trigger — hidden when the CMS has locked the feed to a single topic,
+            and hidden entirely in CMS preview/edit renders (live-front-end feature only) */}
+        {!topicFilter && !isPreview && (
+          <FilterTriggerButton
+            ref={filterTriggerRef}
+            open={filtersOpen}
+            onClick={() => setFiltersOpen(v => !v)}
+            activeCount={activeTopic ? 1 : 0}
+            panelId={filterPanelId}
+          />
         )}
         {/* When topic-locked: show the active topic as a static label */}
         {topicFilter && (
@@ -380,22 +339,49 @@ export default function BlogFeedClient({
         </div>
       </div>
 
-      {/* ── Posts ───────────────────────────────────────────────────────────── */}
-      {pagePosts.length === 0 ? (
-        <EmptyState onBrand={onBrand} filtered={activeTopic !== null} />
-      ) : view === 'grid' ? (
-        <div className={gridClass}>
-          {pagePosts.map(post => (
-            <BlogCard key={post._metadata.key} post={post} onBrand={onBrand} mounted={mounted} />
-          ))}
-        </div>
-      ) : (
-        <div>
-          {pagePosts.map(post => (
-            <BlogListRow key={post._metadata.key} post={post} onBrand={onBrand} mounted={mounted} />
-          ))}
-        </div>
+      {/* Filter drawer — same gating as the trigger above */}
+      {!topicFilter && !isPreview && (
+        <FilterDrawer
+          id={filterPanelId}
+          open={filtersOpen}
+          onClose={() => setFiltersOpen(false)}
+          activeCount={activeTopic ? 1 : 0}
+          onClearAll={() => changeTopic(null)}
+          triggerRef={filterTriggerRef}
+        >
+          <FilterPillGroup
+            icon={Tag}
+            heading="Topic"
+            ariaLabel="Filter by topic"
+            value={activeTopic}
+            onSelect={v => changeTopic(activeTopic === v ? null : v)}
+            options={topics.map(t => ({ value: t as string | null, label: topicLabel(t) }))}
+          />
+        </FilterDrawer>
       )}
+
+      {/* ── Posts ───────────────────────────────────────────────────────────── */}
+      {/* Keyed on the active topic so a filter change fades the swapped-in set
+          in, instead of the list silently replacing itself mid-scroll. */}
+      <div key={activeTopic ?? 'all'} className="animate-filter-swap">
+        {pagePosts.length === 0 ? (
+          <EmptyState onBrand={onBrand} filtered={activeTopic !== null} />
+        ) : view === 'grid' ? (
+          <div className={gridClass}>
+            {pagePosts.map(post => (
+              <BlogCard key={post._metadata.key} post={post} onBrand={onBrand} mounted={mounted} />
+            ))}
+          </div>
+        ) : (
+          <ul className="flex flex-col gap-sm">
+            {pagePosts.map(post => (
+              <li key={post._metadata.key}>
+                <BlogListRow post={post} onBrand={onBrand} mounted={mounted} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       {/* ── Pagination ──────────────────────────────────────────────────────── */}
       <Pagination

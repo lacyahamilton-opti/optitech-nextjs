@@ -3,25 +3,15 @@ import FormWrapper from '@/components/forms/FormWrapper'
 import type { FormDependencyRule } from '@/components/forms/FormRulesContext'
 import { getClient } from '@/lib/optimizely'
 
-// KNOWN PLATFORM LIMITATION (confirmed live, 2026-09-03): Optimizely Forms
-// sections are always placed on a page as a shared-block *reference*
-// (composition node shape: { component: { reference: "cms://content/..." } }
-// per the CMS Management API), never inline. Optimizely Graph's delivery API
-// omits reference-type composition nodes from `composition.nodes` entirely —
-// verified directly against Graph for a real page: it returned every other
-// (inline) block but not this one, under both the concrete
-// (CompositionComponentNode) and interface (ICompositionComponentNode) node
-// types. This means the code below is unreachable for a real VB-placed form
-// today — everything in this file is verified correct via a direct-by-key
-// render (see the showcase demo), but the composition node itself never
-// reaches CompositionRenderer/OptimizelyComponent to invoke this adapter at
-// all. Fixing this needs either official Optimizely guidance on delivering
-// referenced Forms sections via Graph, or a supplementary fetch against the
-// CMS Content Management API to detect+resolve the reference (a real
-// architecture change: a new credential surface on the app, not a patch) —
-// deliberately not built yet. Revisit once @optimizely/cms-sdk publishes its
-// forms/react module (unreleased as of this writing), which may resolve this
-// internally.
+// Forms placed inline on a VB page arrive in the page's composition as
+// section → step → row → column → OptiForms*Element (verified live on
+// /campaigns/developers, 2026-09-24). Since @optimizely/cms-sdk 3.0.0 the
+// page query selects the element fields, so the inline nodes render fully;
+// on 2.2.0 the columns came back empty. An inline section has no
+// `_metadata.key`, so the refetch-by-key below only runs for keyed forms
+// (e.g. the showcase demo). Earlier (2026-09-03) a form placed as a
+// shared-block *reference* was dropped from Graph's `composition.nodes`
+// entirely — re-test that placement if a form ever goes missing outright.
 
 type Props = {
   content: any
@@ -30,7 +20,7 @@ type Props = {
 
 const widthClasses: Record<string, string> = {
   narrow:  'max-w-3xl w-full mx-auto',
-  default: 'max-w-4xl w-full mx-auto',
+  default: 'max-w-5xl w-full mx-auto',
   wide:    'max-w-6xl w-full mx-auto',
   full:    'w-full px-md lg:px-lg',
 }
@@ -149,7 +139,14 @@ async function fetchFormData(contentKey: string): Promise<{
 export default async function OptiFormsContainerDataAdapter({ content, displaySettings = {} }: Props) {
   const { pa } = getPreviewUtils(content)
 
-  const width   = String(displaySettings.contentWidth      ?? 'default')
+  // Confirmed live: a Forms container placed on a page has no author-facing
+  // control for its own Content Width at all (unlike a VB block's settings
+  // picker) — 'narrow' is what the CMS attaches with nothing to override
+  // it, not a deliberate choice, so it's treated the same as an absent
+  // setting rather than trusted. If a real choice other than 'narrow' ever
+  // does reach here (e.g. a future CMS UI update), it passes through as-is.
+  const rawWidth = String(displaySettings.contentWidth ?? 'default')
+  const width    = rawWidth === 'narrow' ? 'default' : rawWidth
   const spacing = String(displaySettings.verticalSpacing   ?? 'large')
   const bg      = String(displaySettings.backgroundColor   ?? 'none')
 

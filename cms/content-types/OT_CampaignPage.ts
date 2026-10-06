@@ -7,6 +7,7 @@ import { OT_QuoteBlock }       from './OT_QuoteBlock'
 import { OT_VideoBlock }       from './OT_VideoBlock'
 import { OT_ImageBlock }       from './OT_ImageBlock'
 import { OT_BannerBlock }      from './OT_BannerBlock'
+import { enableExternalPreviewProperty } from './_shared/externalPreview'
 
 export const OT_CampaignPage = contentType({
   key:             'OT_CampaignPage',
@@ -18,13 +19,7 @@ export const OT_CampaignPage = contentType({
 
     // ── Content slots ─────────────────────────────────────────────────────────
 
-    enableExternalPreview: {
-      type:        'boolean',
-      displayName: 'Enable External Preview Link',
-      description: 'When enabled, a shareable preview link is generated in the CMS editor so reviewers can view this draft in the live front-end without a CMS login.',
-      group:       'OT_Content',
-      sortOrder:   5,
-    },
+    enableExternalPreview: enableExternalPreviewProperty,
     heroSection: {
       type:        'array',
       displayName: 'Hero',

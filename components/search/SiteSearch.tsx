@@ -1,18 +1,19 @@
 'use client'
 
-import { useEffect, useRef, useCallback, useState } from 'react'
+import { useEffect, useId, useRef, useCallback, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {
-  Search, X, Maximize2, Minimize2,
-  FileText, Newspaper, LayoutGrid, Sparkles, Hash, List, SlidersHorizontal,
+  Search, X, Maximize2, Minimize2, Check, ChevronDown,
+  FileText, Newspaper, LayoutGrid, Sparkles, List, Layers, Tag,
   CalendarDays, MapPin, Video, ExternalLink, Code2,
 } from 'lucide-react'
 import { useSearch } from './SearchProvider'
 import { useTranslation } from '@/lib/i18n/useTranslation'
-import type { SearchResult } from '@/lib/search'
+import type { SearchResult, AutocompleteSuggestion, AutocompleteType } from '@/lib/search'
 import { formatEventDate, eventTypeLabel } from '@/lib/eventFormat'
+import { FilterTriggerButton, FilterDrawer, FilterRadioGroup, FilterPillGroup } from '@/components/ui/FilterDrawer'
 
 type DisplayMode = 'immersive' | 'compact'
 type TypeFilter  = 'all' | 'Blog' | 'Page' | 'Event'
@@ -26,6 +27,40 @@ const TYPE_FILTERS: { value: TypeFilter; label: string; Icon: typeof LayoutGrid 
   { value: 'Page',  label: 'Page',   Icon: FileText     },
   { value: 'Event', label: 'Events', Icon: CalendarDays },
 ]
+
+// Suggestion group order + icon/label, reusing the same vocabulary as
+// TYPE_FILTERS above so the typeahead groups read identically to the filter drawer.
+const SUGGESTION_GROUP_ORDER: AutocompleteType[] = ['Blog', 'Event', 'Page']
+const SUGGESTION_GROUP_META: Record<AutocompleteType, { label: string; Icon: typeof LayoutGrid }> = {
+  Blog:  { label: 'Blog',   Icon: Newspaper    },
+  Event: { label: 'Events', Icon: CalendarDays },
+  Page:  { label: 'Pages',  Icon: FileText     },
+}
+
+function groupSuggestions(items: AutocompleteSuggestion[]) {
+  const buckets = new Map<AutocompleteType, AutocompleteSuggestion[]>()
+  for (const item of items) {
+    if (!buckets.has(item.type)) buckets.set(item.type, [])
+    buckets.get(item.type)!.push(item)
+  }
+  return SUGGESTION_GROUP_ORDER
+    .filter(type => buckets.has(type))
+    .map(type => ({ type, items: buckets.get(type)! }))
+}
+
+// Bolds every case-insensitive occurrence of `query` within `text` — the
+// typed term stands out inside each suggestion, not just at the start of it.
+function highlightMatch(text: string, query: string) {
+  const q = query.trim()
+  if (!q) return text
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const parts = text.split(new RegExp(`(${escaped})`, 'gi'))
+  return parts.map((part, i) =>
+    part.toLowerCase() === q.toLowerCase()
+      ? <mark key={i} className="bg-brand/20 text-fg font-bold not-italic">{part}</mark>
+      : part
+  )
+}
 
 function isCrossOriginUrl(url: string): boolean {
   if (!url.startsWith('http')) return false
@@ -63,21 +98,27 @@ export default function SiteSearch() {
   const [focusedIdx,  setFocusedIdx]  = useState(-1)
   const [mounted,     setMounted]     = useState(false)
   const [semantic,        setSemantic]        = useState(false)
-  const [flashFilter,     setFlashFilter]     = useState<TypeFilter | null>(null)
   const [viewMode,        setViewMode]        = useState<ViewMode>('list')
-  const [suggestions,     setSuggestions]     = useState<string[]>([])
+  const [suggestions,     setSuggestions]     = useState<AutocompleteSuggestion[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [focusedSugIdx,   setFocusedSugIdx]   = useState(-1)
   const [showDevPanel,    setShowDevPanel]    = useState(false)
   const [queryCopied,     setQueryCopied]     = useState(false)
+  const [filtersOpen,     setFiltersOpen]     = useState(false)
 
   const inputRef           = useRef<HTMLInputElement>(null)
   const resultsRef         = useRef<HTMLElement>(null)
   const debounceRef        = useRef<ReturnType<typeof setTimeout>>(undefined)
   const suggestDebounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const suggestAutoCloseRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const lastSearchUrlRef   = useRef<string>('')
+  const filterTriggerRef   = useRef<HTMLButtonElement>(null)
+  const filterPanelId      = useId()
 
   useEffect(() => { setMounted(true) }, [])
+  // The filter drawer belongs to the search overlay — closing search should
+  // never leave it silently open for next time.
+  useEffect(() => { if (!isOpen) setFiltersOpen(false) }, [isOpen])
 
   useEffect(() => {
     try {
@@ -123,6 +164,45 @@ export default function SiteSearch() {
     return () => document.removeEventListener('keydown', handleKey)
   }, [isOpen, closeSearch])
 
+  // Suggestions dropdown: dismiss on any click outside it, not just on input
+  // blur. Blur alone missed the case where focus had already moved onto a
+  // suggestion row (arrow-key navigation, or just clicking one of the rows
+  // without selecting it) — nothing was listening for that row losing focus,
+  // so the panel could outlive the input's own blur handler entirely.
+  useEffect(() => {
+    if (!showSuggestions) return
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as Node
+      // The reopen chevron sits beside the input, not inside it — exempt the
+      // whole input row (not just the bare <input>) so clicking that button
+      // doesn't register as an "outside" click and immediately undo itself.
+      if (target instanceof Element && target.closest('[data-search-input-row]')) return
+      if (target instanceof Element && target.closest('[data-suggestions-list]')) return
+      setShowSuggestions(false)
+      setFocusedSugIdx(-1)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [showSuggestions])
+
+  // Auto-collapse shortly after the panel appears, so a glance at it doesn't
+  // require a manual dismiss every time — but only when it's never been
+  // touched: hovering into the panel cancels this outright (onMouseLeave then
+  // closes it immediately instead, see SuggestionList), and browsing it with
+  // the keyboard cancels it too. Re-armed whenever the suggestion set changes
+  // (still typing counts as "not shown yet").
+  const SUGGESTION_AUTO_CLOSE_MS = 3200
+
+  useEffect(() => {
+    if (!showSuggestions) { clearTimeout(suggestAutoCloseRef.current); return }
+    clearTimeout(suggestAutoCloseRef.current)
+    suggestAutoCloseRef.current = setTimeout(() => {
+      setShowSuggestions(false)
+      setFocusedSugIdx(-1)
+    }, SUGGESTION_AUTO_CLOSE_MS)
+    return () => clearTimeout(suggestAutoCloseRef.current)
+  }, [showSuggestions, suggestions])
+
   const runSearch = useCallback(async (q: string, type: TypeFilter, useSemanticSearch: boolean) => {
     if (q.trim().length < 2) { setResults([]); setHasSearched(false); return }
     setLoading(true)
@@ -153,7 +233,7 @@ export default function SiteSearch() {
       suggestDebounceRef.current = setTimeout(async () => {
         try {
           const res = await fetch(`/api/search/autocomplete?q=${encodeURIComponent(value.trim())}`)
-          const data: string[] = await res.json()
+          const data: AutocompleteSuggestion[] = await res.json()
           setSuggestions(data)
           setShowSuggestions(data.length > 0)
         } catch {}
@@ -169,23 +249,36 @@ export default function SiteSearch() {
     }, 350)
   }
 
-  const handleSuggestionSelect = (suggestion: string) => {
-    setQuery(suggestion)
+  // Each suggestion is a specific content item (not just a query string), so
+  // selecting one navigates straight there rather than re-running a text
+  // search — mirrors handleResultClick's cross-origin handling below.
+  const handleSuggestionSelect = (suggestion: AutocompleteSuggestion) => {
     setSuggestions([])
     setShowSuggestions(false)
     setFocusedSugIdx(-1)
     clearTimeout(debounceRef.current)
     clearTimeout(suggestDebounceRef.current)
-    runSearch(suggestion, typeFilter, semantic)
-    inputRef.current?.focus()
+    if (isCrossOriginUrl(suggestion.url)) {
+      window.open(suggestion.url, '_blank', 'noopener,noreferrer')
+    } else {
+      router.push(suggestion.url)
+    }
+    closeSearch()
+  }
+
+  // "View all <type>" — keeps the current query, scopes the real results to
+  // this type, and drops the typeahead in favor of the full results list.
+  const handleViewAllType = (type: AutocompleteType) => {
+    setSuggestions([])
+    setShowSuggestions(false)
+    setFocusedSugIdx(-1)
+    handleTypeFilter(type)
   }
 
   const handleTypeFilter = (f: TypeFilter) => {
     if (f === typeFilter) return
     setTypeFilter(f)
     setTopicFilter(null)
-    setFlashFilter(f)
-    setTimeout(() => setFlashFilter(null), 350)
     if (query.trim().length >= 2) runSearch(query, f, semantic)
   }
 
@@ -224,6 +317,7 @@ export default function SiteSearch() {
     if (showSuggestions && suggestions.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault()
+        clearTimeout(suggestAutoCloseRef.current) // actively browsing — don't cut it off mid-navigation
         const next = Math.min(focusedSugIdx + 1, suggestions.length - 1)
         setFocusedSugIdx(next)
         document.querySelectorAll<HTMLElement>('[data-suggestion-item]')[next]?.focus()
@@ -231,6 +325,7 @@ export default function SiteSearch() {
       }
       if (e.key === 'ArrowUp' && focusedSugIdx >= 0) {
         e.preventDefault()
+        clearTimeout(suggestAutoCloseRef.current)
         if (focusedSugIdx === 0) {
           setFocusedSugIdx(-1)
           inputRef.current?.focus()
@@ -298,136 +393,97 @@ export default function SiteSearch() {
     exit:    { opacity: 0, transition: { duration: dur(150) } },
   }
 
-  // ─── Type filter pills ─────────────────────────────────────────────────────
-  // Rounded pill selectors — filled active state, neutral inactive.
-  // Both modes share the same component; compact adjusts size.
+  // ─── Filters drawer content ─────────────────────────────────────────────────
+  // Shared between the immersive and compact panels — only one is ever mounted
+  // at a time, so this is computed once and rendered inside the one FilterDrawer
+  // instance near the bottom of the component.
 
-  function TypeFilterPills({ compact: isCompact }: { compact: boolean }) {
-    const countFor = (f: TypeFilter) => {
-      if (f === 'all')   return allCount
-      if (f === 'Blog')  return blogCount
-      if (f === 'Event') return eventCount
-      return pageCount
-    }
+  const activeFilterCount = (typeFilter !== 'all' ? 1 : 0) + (topicFilter ? 1 : 0)
 
-    return (
-      <div
-        className={`flex items-center flex-wrap ${isCompact ? 'gap-[5px]' : 'gap-xs'}`}
-        role="group"
-        aria-label={t('search.contentTypeFilter')}
-      >
-        {TYPE_FILTERS.map(f => {
-          const isActive = typeFilter === f.value
-          const count    = countFor(f.value)
-          const isNew    = flashFilter === f.value
-
-          return (
-            <motion.button
-              key={f.value}
-              type="button"
-              onClick={() => handleTypeFilter(f.value)}
-              aria-pressed={isActive}
-              animate={isNew && !prefersReducedMotion ? { scale: [1, 0.92, 1.04, 1] } : { scale: 1 }}
-              transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
-              whileTap={prefersReducedMotion ? {} : { scale: 0.94 }}
-              className={[
-                'flex items-center gap-[5px] rounded-full transition-all duration-200',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 focus-visible:ring-offset-canvas',
-                isCompact
-                  ? 'px-[10px] py-[5px] text-[10px]'
-                  : 'px-[14px] py-[8px] text-[12px]',
-                isActive
-                  ? 'bg-brand text-fg-on-brand shadow-[0_2px_10px_var(--ot-bloom-brand-faint)]'
-                  : 'border border-fg/18 text-fg-muted hover:border-brand/40 hover:text-fg hover:bg-brand/5',
-              ].join(' ')}
-            >
-              <f.Icon size={isCompact ? 10 : 12} className="shrink-0" />
-              <span className="font-semibold uppercase tracking-[0.07em]">{f.label}</span>
-              {hasSearched && count > 0 && (
-                <span className={[
-                  'font-bold tabular-nums',
-                  isCompact ? 'text-[9px]' : 'text-[10px]',
-                  isActive ? 'text-fg-on-brand/80' : 'text-fg-muted/40',
-                ].join(' ')}>
-                  {count}
-                </span>
-              )}
-            </motion.button>
-          )
-        })}
-
-        {/* Semantic / AI toggle */}
-        <motion.button
-          type="button"
-          onClick={handleSemanticToggle}
-          aria-pressed={semantic}
-          whileTap={prefersReducedMotion ? {} : { scale: 0.94 }}
-          title={semantic ? t('search.semanticOn') : t('search.semanticOff')}
-          className={[
-            'flex items-center gap-[5px] rounded-full transition-all duration-200',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-canvas',
-            isCompact ? 'px-[10px] py-[5px] text-[10px]' : 'px-[14px] py-[8px] text-[12px]',
-            semantic
-              ? 'bg-accent/15 text-accent ring-1 ring-accent/30'
-              : 'bg-fg/7 text-fg-muted/50 hover:bg-fg/12 hover:text-fg',
-          ].join(' ')}
-        >
-          <Sparkles size={isCompact ? 10 : 12} className="shrink-0" />
-          <span className="font-semibold uppercase tracking-[0.07em]">AI</span>
-        </motion.button>
-      </div>
-    )
+  function countFor(f: TypeFilter) {
+    if (f === 'all')   return allCount
+    if (f === 'Blog')  return blogCount
+    if (f === 'Event') return eventCount
+    return pageCount
   }
 
-  // ─── Topic chips ───────────────────────────────────────────────────────────
-
-  function TopicChips({ compact: isCompact }: { compact: boolean }) {
-    if (!showTopics) return null
-    return (
-      <div className={`flex flex-wrap items-center gap-xs ${isCompact ? '' : 'mt-xs'}`}>
-        <span className="flex items-center gap-[4px] text-[10px] uppercase tracking-[0.11em] font-bold text-fg-muted/50 shrink-0 mr-[2px] select-none">
-          <Hash size={10} aria-hidden />
-          {!isCompact && 'Topics'}
-        </span>
-        {availableTopics.map(topic => {
-          const isActive = topicFilter === topic
-          return (
-            <motion.button
-              key={topic}
-              type="button"
-              onClick={() => setTopicFilter(isActive ? null : topic)}
-              aria-pressed={isActive}
-              whileTap={prefersReducedMotion ? {} : { scale: 0.93 }}
-              className={[
-                isCompact ? 'px-[9px] py-[4px] text-[10px]' : 'px-sm py-[5px] text-[11px]',
-                'uppercase tracking-[0.08em] font-semibold rounded-full transition-all duration-200',
-                'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand',
-                isActive
-                  ? 'bg-brand/15 ring-1 ring-brand/30 text-brand'
-                  : 'border border-fg/15 text-fg-muted/75 hover:border-fg/30 hover:text-fg-muted hover:bg-fg/8',
-              ].join(' ')}
-            >
-              {topic}
-            </motion.button>
-          )
-        })}
-        {topicFilter && (
-          <button
-            type="button"
-            onClick={() => setTopicFilter(null)}
-            className="text-[10px] text-fg-muted/30 hover:text-fg-muted transition-colors ml-xs focus-visible:outline-none"
-          >
-            {t('search.clearFilter')}
-          </button>
-        )}
-      </div>
-    )
+  function clearAllFilters() {
+    if (typeFilter !== 'all') handleTypeFilter('all')
+    setTopicFilter(null)
   }
 
+  // Returns an ARRAY, not a fragment — FilterDrawer stagger-reveals each direct
+  // child individually, and a fragment would collapse to a single child slot.
+  function FiltersPanelContent() {
+    return [
+        <FilterRadioGroup
+          key="type"
+          icon={Layers}
+          heading="Type"
+          ariaLabel={t('search.contentTypeFilter')}
+          value={typeFilter}
+          onSelect={handleTypeFilter}
+          options={TYPE_FILTERS.map(f => ({
+            value: f.value,
+            label: f.label,
+            count: hasSearched ? countFor(f.value) : undefined,
+          }))}
+        />,
+
+        // Semantic search is a capability toggle, not a filter option — it stays
+        // a switch, never a radio row, so it can't be mistaken for a 5th type.
+        <div key="mode">
+          <div className="mb-md flex items-center gap-sm text-fg">
+            <Sparkles size={18} strokeWidth={2} aria-hidden className="text-brand" />
+            <span className="text-body font-bold">Search mode</span>
+          </div>
+          <div className="flex items-center justify-between gap-md rounded-ot-control border border-fg/10 px-sm py-2.5">
+            <span className="text-body text-fg">{semantic ? t('search.semanticOn') : t('search.semanticOff')}</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={semantic}
+              aria-label="Enable AI semantic search"
+              onClick={handleSemanticToggle}
+              className={[
+                'relative h-6 w-11 shrink-0 rounded-full border transition-colors duration-150 ease-quick',
+                'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
+                semantic ? 'border-accent bg-accent' : 'border-fg/20 bg-fg/10',
+              ].join(' ')}
+            >
+              <span
+                aria-hidden
+                className={[
+                  'absolute top-0.5 flex h-4.5 w-4.5 items-center justify-center rounded-full bg-canvas transition-transform duration-150 ease-quick',
+                  semantic ? 'translate-x-[22px]' : 'translate-x-0.5',
+                ].join(' ')}
+              >
+                {semantic && <Check size={11} strokeWidth={3} className="text-accent" />}
+              </span>
+            </button>
+          </div>
+        </div>,
+
+        showTopics && (
+          <FilterPillGroup
+            key="topic"
+            icon={Tag}
+            heading="Topic"
+            ariaLabel="Filter by topic"
+            value={topicFilter}
+            onSelect={v => setTopicFilter(topicFilter === v ? null : v)}
+            options={availableTopics.map(topic => ({ value: topic as string | null, label: topic }))}
+          />
+        ),
+    ].filter(Boolean)
+  }
 
   // ─── Suggestion dropdown ───────────────────────────────────────────────────
 
   function SuggestionList({ compact: isCompact }: { compact: boolean }) {
+    const groups = groupSuggestions(suggestions)
+    let flatIndex = -1
+
     return (
       <AnimatePresence>
         {showSuggestions && suggestions.length > 0 && (
@@ -436,61 +492,100 @@ export default function SiteSearch() {
             role="listbox"
             aria-label="Suggested results"
             data-suggestions-list
+            // Hovering in cancels the auto-close timer outright — stays open
+            // for as long as the pointer is over it. The moment it leaves,
+            // it collapses immediately (no restarted timer): a decisive,
+            // physical dismiss instead of another arbitrary wait. The
+            // chevron button next to the input brings it back without retyping.
+            onMouseEnter={() => clearTimeout(suggestAutoCloseRef.current)}
+            onMouseLeave={() => { setShowSuggestions(false); setFocusedSugIdx(-1) }}
+            onKeyDown={e => {
+              // Attached here (not just on the input) so Escape dismisses even
+              // after arrow-key navigation has moved focus onto a row.
+              if (e.key === 'Escape') {
+                e.stopPropagation()
+                setShowSuggestions(false)
+                setFocusedSugIdx(-1)
+                inputRef.current?.focus()
+              }
+            }}
             initial={{ opacity: 0, y: -8, scale: 0.98 }}
             animate={{ opacity: 1, y: 0,  scale: 1 }}
             exit={{ opacity: 0, y: -4, scale: 0.98, transition: { duration: dur(100) } }}
             transition={{ duration: dur(180), ease: [0.16, 1, 0.3, 1] }}
             className={[
-              'absolute top-full left-0 right-0 z-20 overflow-hidden',
+              'absolute top-full left-0 right-0 z-20 overflow-hidden max-h-[70vh] overflow-y-auto',
               'bg-canvas border border-fg/12 shadow-[0_12px_40px_oklch(0%_0_0/0.22)]',
               isCompact ? 'rounded-b-ot-surface mt-px' : 'rounded-ot-surface mt-xs',
             ].join(' ')}
           >
             {/* Header */}
             <div className="flex items-center justify-between px-3.5 py-2.25 border-b border-fg/8">
-              <div className="flex items-center gap-1.5">
-                <Sparkles size={11} className="text-brand/70" aria-hidden />
-                <span className="text-[10px] uppercase tracking-[0.12em] font-bold text-fg-muted/50 select-none">
-                  Suggested results
-                </span>
-              </div>
+              <span className="inline-flex w-fit items-center gap-1 rounded-full bg-accent px-sm py-1 text-[10px] uppercase tracking-[0.12em] font-bold text-fg-on-accent select-none">
+                <Sparkles size={11} aria-hidden />
+                Suggested results
+              </span>
               <button
                 type="button"
                 onMouseDown={e => { e.preventDefault(); setShowSuggestions(false); setFocusedSugIdx(-1) }}
                 aria-label="Dismiss suggestions"
-                className="text-fg-muted/30 hover:text-fg-muted transition-colors duration-100 p-0.75 rounded"
+                className="text-fg-muted/60 hover:text-fg hover:bg-fg/8 transition-colors duration-100 p-1 -m-1 rounded-ot-control"
               >
-                <X size={12} />
+                <X size={13} />
               </button>
             </div>
-            {/* Items */}
-            <ul>
-              {suggestions.map((s, i) => (
-                <li key={s} role="option" aria-selected={focusedSugIdx === i}>
-                  <button
-                    data-suggestion-item
-                    type="button"
-                    onMouseDown={e => { e.preventDefault(); handleSuggestionSelect(s) }}
-                    className={[
-                      'w-full text-left flex items-center gap-sm transition-colors duration-100',
-                      'border-b border-fg/5 last:border-0',
-                      isCompact ? 'px-3.5 py-2.5' : 'px-4.5 py-3.25',
-                      focusedSugIdx === i
-                        ? 'bg-brand/10'
-                        : 'hover:bg-brand/6',
-                    ].join(' ')}
-                  >
-                    <Search size={isCompact ? 11 : 13} className="shrink-0 text-fg-muted/30" aria-hidden />
-                    <span className={`font-medium text-fg flex-1 ${isCompact ? 'text-[13px]' : 'text-[15px]'}`}>
-                      {s}
+            {/* Groups */}
+            {groups.map(group => {
+              const { label: groupLabel, Icon: GroupIcon } = SUGGESTION_GROUP_META[group.type]
+              return (
+                <div key={group.type}>
+                  <div className="flex items-center justify-between gap-sm px-3.5 pt-2.5 pb-1.5">
+                    <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.1em] font-bold text-fg-muted/60 select-none">
+                      <GroupIcon size={11} className="shrink-0" aria-hidden />
+                      {groupLabel} ({group.items.length})
                     </span>
-                    <span className="text-[10px] text-fg-muted/25 font-mono shrink-0 ml-sm select-none">
-                      ↵
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+                    <button
+                      type="button"
+                      onMouseDown={e => { e.preventDefault(); handleViewAllType(group.type) }}
+                      className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.06em] text-brand hover:text-brand-hover transition-colors"
+                    >
+                      View all →
+                    </button>
+                  </div>
+                  <ul>
+                    {group.items.map(item => {
+                      flatIndex += 1
+                      const i = flatIndex
+                      return (
+                        <li key={`${group.type}-${item.label}`} role="option" aria-selected={focusedSugIdx === i}>
+                          <button
+                            data-suggestion-item
+                            type="button"
+                            onMouseDown={e => { e.preventDefault(); handleSuggestionSelect(item) }}
+                            className={[
+                              'w-full text-left flex items-center gap-sm transition-colors duration-100',
+                              'border-b border-fg/5',
+                              isCompact ? 'px-3.5 py-2.5' : 'px-4.5 py-3.25',
+                              focusedSugIdx === i
+                                ? 'bg-brand/10'
+                                : 'hover:bg-brand/6',
+                            ].join(' ')}
+                          >
+                            <Search size={isCompact ? 11 : 13} className="shrink-0 text-fg-muted/30" aria-hidden />
+                            <span className={`font-medium text-fg flex-1 truncate ${isCompact ? 'text-[13px]' : 'text-[15px]'}`}>
+                              {highlightMatch(item.label, query)}
+                            </span>
+                            <span className="text-[10px] text-fg-muted/25 font-mono shrink-0 ml-sm select-none">
+                              ↵
+                            </span>
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              )
+            })}
           </motion.div>
         )}
       </AnimatePresence>
@@ -958,7 +1053,7 @@ export default function SiteSearch() {
 
             {/* Search input */}
             <label htmlFor="search-input-immersive" className="sr-only">{t('search.inputLabel')}</label>
-            <div className="relative flex items-center border-b-2 border-fg/15 focus-within:border-brand transition-colors duration-200 mb-lg">
+            <div data-search-input-row className="relative flex items-center border-b-2 border-fg/15 focus-within:border-brand transition-colors duration-200 mb-lg">
               <Search size={18} className="shrink-0 text-fg-muted/40 mr-sm" aria-hidden />
               <input
                 ref={inputRef}
@@ -981,6 +1076,17 @@ export default function SiteSearch() {
                   '[&::-webkit-search-cancel-button]:hidden',
                 ].join(' ')}
               />
+              {suggestions.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowSuggestions(v => !v)}
+                  aria-label={showSuggestions ? 'Hide suggestions' : 'Show suggestions'}
+                  aria-expanded={showSuggestions}
+                  className="shrink-0 p-xs text-fg-muted/40 hover:text-fg transition-colors"
+                >
+                  <ChevronDown size={15} className={`transition-transform duration-150 ${showSuggestions ? 'rotate-180' : ''}`} />
+                </button>
+              )}
               {query && (
                 <button
                   type="button"
@@ -994,19 +1100,18 @@ export default function SiteSearch() {
               {SuggestionList({ compact: false })}
             </div>
 
-            {/* Filter section */}
-            <div className="mb-md">
-              <div className="flex items-center gap-[5px] mb-[10px]">
-                <SlidersHorizontal size={11} className="text-fg-muted/50" strokeWidth={2} aria-hidden />
-                <span className="text-[10px] uppercase tracking-[0.13em] font-bold text-fg-muted/50 select-none">
-                  Refine by
-                </span>
-              </div>
-              <div className="flex items-center flex-wrap gap-sm justify-between">
-                {TypeFilterPills({ compact: false })}
+            {/* Filters trigger — opens the shared left-anchored filter drawer */}
+            <div className="mb-md flex items-center justify-between gap-md">
+              <FilterTriggerButton
+                ref={filterTriggerRef}
+                open={filtersOpen}
+                onClick={() => setFiltersOpen(v => !v)}
+                activeCount={activeFilterCount}
+                panelId={filterPanelId}
+              />
 
               {/* List / card view toggle */}
-              <div className="flex items-center gap-[2px] ml-auto" role="group" aria-label="View mode">
+              <div className="flex items-center gap-[2px] shrink-0" role="group" aria-label="View mode">
                 <button
                   type="button"
                   aria-label="List view"
@@ -1038,15 +1143,7 @@ export default function SiteSearch() {
                   <LayoutGrid size={16} strokeWidth={1.75} />
                 </button>
               </div>
-              </div>
             </div>
-
-            {/* Topic chips */}
-            {showTopics && (
-              <div className="mb-md">
-                {TopicChips({ compact: false })}
-              </div>
-            )}
 
 
             {/* Loading */}
@@ -1144,7 +1241,7 @@ export default function SiteSearch() {
         <div className="px-md pt-[8px] pb-[10px] border-b border-fg/8 shrink-0">
           <label htmlFor="search-input-compact" className="sr-only">{t('search.inputLabel')}</label>
           <div className="relative">
-            <div className="flex items-center gap-[8px] rounded-ot-control border border-fg/18 bg-fg/5 shadow-[inset_0_1px_3px_oklch(from_var(--ot-fg)_l_c_h/0.12),inset_0_-1px_0_oklch(from_var(--ot-fg)_l_c_h/0.04)] focus-within:border-brand/55 focus-within:bg-brand/5 focus-within:shadow-[inset_0_1px_4px_oklch(from_var(--ot-fg)_l_c_h/0.18),0_0_0_3px_var(--ot-bloom-brand-border)] px-2.5 py-2.25 transition-[border-color,background-color,box-shadow] duration-150">
+            <div data-search-input-row className="flex items-center gap-[8px] rounded-ot-control border border-fg/18 bg-fg/5 shadow-[inset_0_1px_3px_oklch(from_var(--ot-fg)_l_c_h/0.12),inset_0_-1px_0_oklch(from_var(--ot-fg)_l_c_h/0.04)] focus-within:border-brand/55 focus-within:bg-brand/5 focus-within:shadow-[inset_0_1px_4px_oklch(from_var(--ot-fg)_l_c_h/0.18),0_0_0_3px_var(--ot-bloom-brand-border)] px-2.5 py-2.25 transition-[border-color,background-color,box-shadow] duration-150">
               <Search size={14} className="shrink-0 text-fg-muted/45" aria-hidden />
               <input
                 ref={inputRef}
@@ -1167,6 +1264,17 @@ export default function SiteSearch() {
                   '[&::-webkit-search-cancel-button]:hidden',
                 ].join(' ')}
               />
+              {suggestions.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowSuggestions(v => !v)}
+                  aria-label={showSuggestions ? 'Hide suggestions' : 'Show suggestions'}
+                  aria-expanded={showSuggestions}
+                  className="shrink-0 p-[3px] text-fg-muted/40 hover:text-fg transition-colors"
+                >
+                  <ChevronDown size={13} className={`transition-transform duration-150 ${showSuggestions ? 'rotate-180' : ''}`} />
+                </button>
+              )}
               {query && (
                 <button
                   type="button"
@@ -1182,19 +1290,16 @@ export default function SiteSearch() {
           </div>
         </div>
 
-        {/* Filter row — compact pills */}
-        <div className="px-md py-[9px] border-b border-fg/8 shrink-0 overflow-x-auto">
-          <div className="flex items-center gap-[5px] min-w-max">
-            {TypeFilterPills({ compact: true })}
-          </div>
+        {/* Filters trigger — opens the shared left-anchored filter drawer */}
+        <div className="px-md py-sm border-b border-fg/8 shrink-0">
+          <FilterTriggerButton
+            ref={filterTriggerRef}
+            open={filtersOpen}
+            onClick={() => setFiltersOpen(v => !v)}
+            activeCount={activeFilterCount}
+            panelId={filterPanelId}
+          />
         </div>
-
-        {/* Topic chips */}
-        {showTopics && (
-          <div className="px-md py-[8px] border-b border-fg/8 shrink-0">
-            {TopicChips({ compact: true })}
-          </div>
-        )}
 
         {/* Results */}
         <div
@@ -1270,6 +1375,17 @@ export default function SiteSearch() {
           >
             {mode === 'immersive' ? ImmersivePanel() : CompactPanel()}
           </motion.div>
+
+          <FilterDrawer
+            id={filterPanelId}
+            open={filtersOpen}
+            onClose={() => setFiltersOpen(false)}
+            activeCount={activeFilterCount}
+            onClearAll={clearAllFilters}
+            triggerRef={filterTriggerRef}
+          >
+            {FiltersPanelContent()}
+          </FilterDrawer>
         </>
       )}
     </AnimatePresence>,

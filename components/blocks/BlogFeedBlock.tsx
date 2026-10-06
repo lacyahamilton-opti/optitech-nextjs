@@ -28,6 +28,8 @@ export type BlogFeedBlockProps = {
    */
   topicFilter?:  string | null
   styleOptions?: BlogFeedStyleOptions
+  /** True for any CMS draft/preview render (Visual Builder, draft links) — hides the filter drawer. */
+  isPreview?:    boolean
   /** Preview-attribute factory from getPreviewUtils — only available in server context */
   pa?:           (prop: string) => Record<string, unknown>
 }
@@ -57,6 +59,7 @@ export default function BlogFeedBlock({
   pageSize     = 9,
   topicFilter  = null,
   styleOptions = {},
+  isPreview    = false,
   pa           = () => ({}),
 }: BlogFeedBlockProps) {
   const {
@@ -106,6 +109,7 @@ export default function BlogFeedBlock({
           onBrand={onBrand}
           anchorId={anchorId}
           defaultView={defaultView}
+          isPreview={isPreview}
         />
 
       </div>

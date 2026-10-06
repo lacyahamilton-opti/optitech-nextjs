@@ -11,8 +11,11 @@ import { cva } from "class-variance-authority";
  * arranges it differently. "color" remains the ground-palette modifier within
  * every direction.
  *   editorialSplit — the default: solid-color text panel beside a contained visual
- *   spotlight      — text leads; the visual floats as a framed object with a brand-bloom halo (compact)
- *   overlap        — layered editorial; the headline plate overlaps a contained image edge
+ *   spotlight      — a wide content panel leads beside a deliberately small,
+ *                    offset-framed image; no full-bleed color panel
+ *   overlap        — layered editorial; the headline plate is anchored to the
+ *                    image's bottom edge and pulled up by a % of its own height,
+ *                    at any viewport width or copy length
  *   diagonal       — a sharp diagonal seam between a color panel and a contained image, accent-lit
  */
 export type HeroDirection =
@@ -89,6 +92,31 @@ const headlineCva = cva(
   }
 );
 
+// Spotlight-only type voice: thin-but-large headline, medium-bold body — the
+// opposite weight pairing from Overlap/Diagonal's extrabold headline + regular
+// body, so the direction reads differently even set in the same family/scale.
+const spotlightHeadlineCva = cva("text-hero font-light leading-display tracking-display text-balance", {
+  variants: {
+    color: {
+      brand:   "text-fg-on-brand",
+      canvas:  "text-fg",
+      surface: "text-fg",
+    },
+  },
+  defaultVariants: { color: "brand" },
+});
+
+const spotlightBodyCva = cva("text-body font-semibold leading-body max-w-(--ot-measure-tight)", {
+  variants: {
+    color: {
+      brand:   "text-fg-on-brand/80",
+      canvas:  "text-fg-muted",
+      surface: "text-fg-muted",
+    },
+  },
+  defaultVariants: { color: "brand" },
+});
+
 const bodyCva = cva("text-body leading-body max-w-(--ot-measure-tight)", {
   variants: {
     color: {
@@ -136,8 +164,12 @@ const secondaryCtaCva = cva(
   }
 );
 
+// Editorial Split is a flush two-panel layout — the visual panel sits directly
+// against the square text panel with no gap, so it always stays sharp-cornered
+// (rounded-none) even when the theme's Corner Style axis is Soft/Rounded;
+// rounding just this one edge would misalign it against the text panel.
 const visualPanelCva = cva(
-  "relative overflow-hidden rounded-ot-surface aspect-video lg:aspect-auto lg:flex-1",
+  "relative overflow-hidden rounded-none aspect-video lg:aspect-auto lg:flex-1",
   {
     variants: {
       color: {
@@ -355,12 +387,15 @@ function HeroCtas({
   );
 }
 
-// ─── Direction: Spotlight Bloom (compact) ────────────────────────────────────────
-// Text leads on a single unified ground; the visual floats as a contained, framed
-// object lit by a chromatic brand-bloom halo (never a full-bleed backdrop — that's
-// the Banner's job). Height-conscious: trimmed vertical padding + a wide, capped
-// media so the hero stays within roughly one band. No image → the statement carries
-// the fold on its own.
+// ─── Direction: Spotlight ─────────────────────────────────────────────────────────
+// A near-50/50 split, both panels matched to the same height — comparable to
+// Diagonal's proportions — but with a distinct mechanic and voice: the image sits
+// in an offset frame (a second bordered plate set behind it, no rotation) with a
+// chromatic bloom shadow instead of Diagonal's full-bleed angled panel or
+// Overlap's corner-pinned card, and the text uses a thin-but-large headline +
+// medium-bold body instead of the shared extrabold/regular pairing. The section
+// itself never takes the full-bleed color fill Diagonal uses — only the content
+// panel does. "layout" places the image left/right; the panel takes the other side.
 
 function SpotlightHero({
   eyebrow, headline, body, primaryCta, secondaryCta, visualSrc, visualAlt, visual, color, layout, animation, pa,
@@ -368,45 +403,87 @@ function SpotlightHero({
   const hasVisual = !!(visual || visualSrc);
   const anim = entranceClass(animation);
   const imageLeft = layout === "imageLeft";
-  // Give the text the larger track (whichever side it lands on) so headlines get
-  // room; the media keeps the smaller share.
-  const cols = imageLeft ? "lg:grid-cols-[0.9fr_1.1fr]" : "lg:grid-cols-[1.1fr_0.9fr]";
+
+  const card = (
+    <div
+      className={`hero-spotlight-card relative z-10 w-full rounded-ot-surface ${groundCva({ color })} p-lg lg:flex-1 lg:p-xl ${
+        hasVisual ? (imageLeft ? "lg:order-2" : "lg:order-1") : ""
+      } ${anim}`}
+      data-theme={color === "brand" ? "dark" : undefined}
+    >
+      {eyebrow && (
+        // Deliberate exception to the system's sharp-corner rule: a pill badge,
+        // used only for this one label, never on buttons/cards/panels.
+        <span
+          className="mb-md inline-flex w-fit items-center rounded-full bg-accent px-sm py-1 text-label font-semibold uppercase tracking-label text-fg-on-accent"
+          {...pa("eyebrow")}
+        >
+          {eyebrow}
+        </span>
+      )}
+      {/* Thin-but-large headline + medium-bold body — the inverse weight pairing
+          from Overlap/Diagonal's extrabold headline + regular body. */}
+      <h1 className={spotlightHeadlineCva({ color })} {...pa("headline")}>{headline}</h1>
+      {body && <p className={`${spotlightBodyCva({ color })} mt-sm`} {...pa("body")}>{body}</p>}
+      <HeroCtas color={color} primaryCta={primaryCta} secondaryCta={secondaryCta} pa={pa} className="mt-md" />
+    </div>
+  );
 
   return (
-    <section
-      className={`${groundCva({ color })} relative overflow-hidden px-md py-lg lg:px-lg lg:py-xl`}
-      data-theme={color === "brand" ? "dark" : undefined}
-      aria-label="Hero"
-    >
+    <section className="relative overflow-hidden bg-canvas px-md py-lg lg:px-lg lg:py-xl" aria-label="Hero">
       <div className="hero-spotlight-aura" aria-hidden />
-      <div className={`relative z-10 grid w-full items-center gap-lg lg:gap-2xl ${hasVisual ? cols : "mx-auto max-w-4xl"}`}>
-        <div className={`flex flex-col gap-md lg:gap-lg ${imageLeft ? "lg:order-2" : ""} ${anim}`}>
-          {eyebrow && <p className={eyebrowCva({ color })} {...pa("eyebrow")}>{eyebrow}</p>}
-          <h1 className={headlineCva({ color })} {...pa("headline")}>{headline}</h1>
-          {body && <p className={bodyCva({ color })} {...pa("body")}>{body}</p>}
-          <HeroCtas color={color} primaryCta={primaryCta} secondaryCta={secondaryCta} pa={pa} className="mt-sm" />
-        </div>
-
-        {hasVisual && (
-          <div className={`relative ${imageLeft ? "lg:order-1" : ""}`} {...pa("visual")}>
-            <div className="hero-bloom-halo" aria-hidden />
-            {/* Wide, height-capped plate keeps the hero compact regardless of viewport. */}
-            <div className="hero-bloom-plate relative aspect-[3/2] max-h-[24rem] overflow-hidden rounded-ot-surface">
-              <HeroMedia visual={visual} visualSrc={visualSrc} visualAlt={visualAlt} sizes="(min-width: 1024px) 45vw, 100vw" />
+      {hasVisual ? (
+        // A fixed aspect ratio for the image scales WITH viewport width (wider
+        // screen → taller image), while the card's height actually shrinks at
+        // wider viewports as the headline wraps to fewer lines — the two drift
+        // apart badly past ~1440px. Instead: the outer slot stretches to match
+        // the card's real height (robust at any width), and only the visible
+        // photo frame gets a small FIXED pixel overhang top/bottom — "slightly
+        // taller" by a constant amount, not a ratio that compounds with width.
+        // The row is width-capped and centered so the pair stays close on
+        // ultrawide screens, and the photo slides a FIXED 56px under the card's
+        // edge (no gap) so the two read as one composition.
+        <div className="relative z-10 mx-auto flex w-full max-w-360 flex-col gap-lg lg:flex-row lg:items-center lg:gap-0">
+          <div
+            className={`relative w-full aspect-[4/3] lg:aspect-auto lg:flex-1 lg:self-stretch ${imageLeft ? "lg:order-1 lg:-mr-14" : "lg:order-2 lg:-ml-14"}`}
+            {...pa("visual")}
+          >
+            {/* Offset frame: a second bordered plate set behind the photo, its own
+                surface fill + brand-tinted ring, shifted a fixed amount so it peeks
+                out on two sides — no rotation, no drop-shadow blur doing the work. */}
+            <div
+              className={`hero-spotlight-frame-offset absolute inset-0 lg:-top-3 lg:-bottom-3 rounded-ot-surface ${
+                imageLeft ? "-translate-x-3 translate-y-3" : "translate-x-3 translate-y-3"
+              }`}
+              aria-hidden
+            />
+            <div className="hero-spotlight-frame absolute inset-0 lg:-top-3 lg:-bottom-3 overflow-hidden rounded-ot-surface">
+              <HeroMedia visual={visual} visualSrc={visualSrc} visualAlt={visualAlt} sizes="(min-width: 1024px) 50vw, 100vw" />
             </div>
           </div>
-        )}
-      </div>
+          {card}
+        </div>
+      ) : (
+        // max-w-168 (42rem), not max-w-2xl — this project's --spacing-2xl
+        // token (128px) shadows Tailwind's named max-width scale for every
+        // key it defines (xs/sm/md/lg/xl/2xl), so max-w-2xl silently
+        // resolves to 128px instead of 42rem. Bare numeric max-w-N avoids it.
+        <div className="relative z-10 mx-auto w-full max-w-168">{card}</div>
+      )}
     </section>
   );
 }
 
-// ─── Direction: Editorial Overlap (polished) ─────────────────────────────────────
-// Layered, magazine composition: a contained image with a solid color headline plate
-// overlapping its edge, an index marker (number + accent rule), and a chromatic depth
-// shadow separating the planes. The image is contained and the type plate occludes
-// its edge — distinct from the Banner's flat full-bleed photo with centered overlay.
-// Polished: capped image height, refined marker, tighter rhythm + vertical padding.
+// ─── Direction: Editorial Overlap ────────────────────────────────────────────────
+// The image is given a fixed height and the plate a GUARANTEED-taller min-height
+// (lg:h-88 vs lg:min-h-104 — 64px of headroom, not derived from copy length), so
+// the shorter image always centers within the taller plate's vertical span and
+// visibly overhangs top and bottom — the effect this direction is named for.
+// Relying on actual content being long enough to naturally exceed the image's
+// height would silently break with a short headline/no body; the min-height
+// makes it structural instead of incidental. The index marker (mono label +
+// accent rule) and extrabold headline are this direction's voice, distinct from
+// Spotlight's pill badge + thin headline and Diagonal's angled seam.
 
 function OverlapHero({
   eyebrow, headline, body, primaryCta, secondaryCta, visualSrc, visualAlt, visual, color, layout, animation, pa,
@@ -418,38 +495,62 @@ function OverlapHero({
   // colors), so it uses the on-brand token there rather than the brand-hued muted.
   const markerColor = color === "brand" ? "text-fg-on-brand/70" : "text-fg-muted";
 
-  const plate = (
-    <div
-      className={`hero-overlap-plate rounded-ot-surface relative z-10 ${groundCva({ color })} p-lg lg:col-span-7 lg:row-start-1 lg:self-center lg:p-xl ${
-        hasVisual ? `-mt-10 mx-md lg:mx-0 lg:mt-0 ${imageLeft ? "lg:col-start-6" : "lg:col-start-1"}` : "lg:col-span-12"
-      } ${anim}`}
-      data-theme={color === "brand" ? "dark" : undefined}
-    >
-      <p className={`mb-md flex items-center gap-sm font-mono text-label uppercase tracking-label ${markerColor}`} {...pa("eyebrow")}>
-        <span className="inline-block h-px w-8 flex-none" style={{ background: "var(--ot-accent)" }} aria-hidden />
-        {eyebrow ? eyebrow : "Hero"}
-      </p>
-      <h1 className={headlineCva({ color })} {...pa("headline")}>{headline}</h1>
-      {body && <p className={`${bodyCva({ color })} mt-sm`} {...pa("body")}>{body}</p>}
-      <HeroCtas color={color} primaryCta={primaryCta} secondaryCta={secondaryCta} pa={pa} className="mt-lg" />
-    </div>
+  const marker = (
+    <p className={`mb-md flex items-center gap-sm font-mono text-label uppercase tracking-label ${markerColor}`} {...pa("eyebrow")}>
+      <span className="inline-block h-px w-8 flex-none" style={{ background: "var(--ot-accent)" }} aria-hidden />
+      {eyebrow ? eyebrow : "Hero"}
+    </p>
   );
+
+  if (!hasVisual) {
+    return (
+      <section className="bg-canvas px-md py-lg lg:px-lg lg:py-xl" aria-label="Hero">
+        <div
+          className={`hero-overlap-plate rounded-ot-surface relative mx-auto max-w-4xl ${groundCva({ color })} p-lg lg:p-2xl ${anim}`}
+          data-theme={color === "brand" ? "dark" : undefined}
+        >
+          {marker}
+          <h1 className={headlineCva({ color })} {...pa("headline")}>{headline}</h1>
+          {body && <p className={`${bodyCva({ color })} mt-sm`} {...pa("body")}>{body}</p>}
+          <HeroCtas color={color} primaryCta={primaryCta} secondaryCta={secondaryCta} pa={pa} className="mt-lg" />
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="bg-canvas px-md py-lg lg:px-lg lg:py-xl" aria-label="Hero">
-      <div className="w-full">
-        <div className="grid items-center gap-0 lg:grid-cols-12">
-          {hasVisual && (
-            <div
-              className={`relative rounded-ot-surface aspect-3/2 max-h-112 w-full overflow-hidden lg:row-start-1 lg:aspect-auto lg:h-112 lg:max-h-none ${
-                imageLeft ? "lg:col-span-6 lg:col-start-1" : "lg:col-span-6 lg:col-start-7"
-              }`}
-              {...pa("visual")}
-            >
-              <HeroMedia visual={visual} visualSrc={visualSrc} visualAlt={visualAlt} sizes="(min-width: 1024px) 50vw, 100vw" />
-            </div>
-          )}
-          {plate}
+      <div className="relative z-10 flex flex-col gap-lg lg:flex-row lg:items-center lg:gap-0">
+        <div
+          className={`relative w-full aspect-[4/3] lg:aspect-auto lg:h-96 lg:flex-1 overflow-hidden rounded-ot-surface ${
+            imageLeft ? "lg:order-1" : "lg:order-2"
+          }`}
+          {...pa("visual")}
+        >
+          <HeroMedia visual={visual} visualSrc={visualSrc} visualAlt={visualAlt} sizes="(min-width: 1024px) 50vw, 100vw" />
+        </div>
+
+        {/* min-h-104 (26rem) guarantees this stays taller than the image's fixed
+            h-96 (24rem) regardless of copy length — the overhang, and the
+            "overlap" it reads as, never depends on content happening to run long.
+            lg:-ml/-mr pulls it directly onto the image's edge (no gap) — a real
+            overlap, not two adjacent panels — while staying a modest ~2rem so it
+            reads as a raised plate, not a panel blocking the photo. */}
+        <div
+          className={`hero-overlap-plate rounded-ot-surface relative z-10 w-full lg:min-h-104 lg:flex-1 ${groundCva({ color })} p-lg lg:p-xl ${
+            imageLeft ? "lg:order-2 lg:-ml-8" : "lg:order-1 lg:-mr-8"
+          } ${anim}`}
+          data-theme={color === "brand" ? "dark" : undefined}
+        >
+          {/* Subtle top-to-bottom shade for depth — neutral, not a brand/token
+              color, so it reads the same across all three color variants. */}
+          <div className="hero-overlap-shade" aria-hidden />
+          <div className="relative z-10">
+            {marker}
+            <h1 className={headlineCva({ color })} {...pa("headline")}>{headline}</h1>
+            {body && <p className={`${bodyCva({ color })} mt-sm`} {...pa("body")}>{body}</p>}
+            <HeroCtas color={color} primaryCta={primaryCta} secondaryCta={secondaryCta} pa={pa} className="mt-lg" />
+          </div>
         </div>
       </div>
     </section>

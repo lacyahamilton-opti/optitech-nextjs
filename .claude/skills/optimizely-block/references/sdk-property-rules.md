@@ -10,7 +10,9 @@ or a `config push` failure.
 | `maxLength` is top-level | `maxLength: 80` at the property root | `validation: { maxLength: 80 }` (no such wrapper) |
 | Localization flag | `isLocalized: true` | `localized: true` |
 | `required` | Not supported — omit it | `required: true` (TS error) |
-| Rich text type | `type: 'richText'` (returns `{ html, json }`) | `type: 'xhtml'` |
+| Rich text type | `type: 'richText'` (returns `{ html, json }` — `html` only because lib/optimizely.ts sets `richTextFormat: 'both'`) | `type: 'xhtml'` |
+| Rich text preset (SDK v3) | `editorSettings: { preset: 'default' } (or 'expanded' / 'minimal')` | `preset: 'standard'` (removed in v3 — TS error) |
+| `content` / `contentReference` constraints (SDK v3) | declare `contentType` **or** a non-empty `allowedTypes`/`restrictedTypes` | none, an empty list, or `contentType` + `allowedTypes` together — `config push` rejects it before upload |
 | Dropdown on a content field | `type: 'string', format: 'selectOne', enum: [{ value, displayName }]` | a bare string and hoping for a picker |
 | Single-select choice editor | display-template `editor: 'select'` with `choices` **or** content-field `format: 'selectOne'` | — |
 | `link` type | returns `{ url, text, title, target }` — render each field | treating it as a plain URL string |

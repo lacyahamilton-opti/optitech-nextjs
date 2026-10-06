@@ -137,6 +137,7 @@ import { RichText } from '@optimizely/cms-sdk/react/richText'
 import { OT_PricingBlock as OT_PricingBlockContentType } from '@/cms/content-types/OT_PricingBlock'
 import { getPricingStyles } from '@/cms/styling/OT_PricingBlock.styling'
 import PricingBlock from '@/components/blocks/PricingBlock'
+import { richTextJson } from '@/lib/richTextJson'
 
 type Props = {
   content:          ContentProps<typeof OT_PricingBlockContentType>
@@ -157,7 +158,7 @@ export default function OT_PricingBlockAdapter({ content, displaySettings = {} }
       <PricingBlock
         eyebrow={content.eyebrow ?? undefined}
         heading={content.heading ?? undefined}
-        body={content.body?.json ?? undefined}                // richText → .json
+        body={richTextJson(content.body)}                        // richText → .json
         imageSrc={src(content.image)}                         // contentReference → url
         cta={content.ctaLabel ? { label: content.ctaLabel, href: content.ctaUrl?.default ?? '#' } : undefined}
         styleOptions={styleOptions}
@@ -250,7 +251,7 @@ export default function PricingBlock({
 
 | Field type | In adapter | In UI |
 |---|---|---|
-| `richText` | `content.body?.json ?? undefined` | `<RichText content={body} />` inside a `data-rich-text` wrapper; **never** `.html` + `dangerouslySetInnerHTML` |
+| `richText` | `richTextJson(content.body)` (from `@/lib/richTextJson` — SDK v3 can return `json` as a string inside inline arrays) | `<RichText content={body} />` inside a `data-rich-text` wrapper; **never** `.html` + `dangerouslySetInnerHTML` |
 | `contentReference` (image) | `const url = src(content.image)`; for srcset `const { getSrcset, getAlt } = damAssets(content)` | `next/image` with `src`, `srcSet={getSrcset(content.image)}`, `alt={getAlt(content.image, '')}` |
 | `url` | `content.ctaUrl?.default` | plain `<a href>` |
 | `link` (nav only) | `{ url, text, title, target }` — add `rel="noopener noreferrer"` when `target === '_blank'` | render each field explicitly |

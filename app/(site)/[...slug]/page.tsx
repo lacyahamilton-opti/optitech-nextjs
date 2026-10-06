@@ -31,6 +31,10 @@ import TopicHubPage            from '@/components/pages/TopicHubPage'
 import Script                  from 'next/script'
 import { DraftStateBanner }    from '@/components/preview/DraftStateBanner'
 import { ExternalPreviewLinkPanel } from '@/components/preview/ExternalPreviewLinkPanel'
+import { ReviewCommentWidget }    from '@/components/preview/ReviewCommentWidget'
+import { ReviewCommentsStrip }    from '@/components/preview/ReviewCommentsStrip'
+import { reviewCommentsEnabled }  from '@/lib/review-comments'
+import { buildExternalPreviewUrl, contentPathname, type PreviewableContent } from '@/lib/external-preview'
 import { buildPageMetadata, type PageSeoFields } from '@/lib/metadata'
 import { buildJsonLd }         from '@/lib/structured-data'
 import JsonLd                  from '@/components/seo/JsonLd'
@@ -51,16 +55,6 @@ type Props = {
 const fetchPageContent = cache(async (path: string, locale: Locale, baseUrl: string) =>
   getLocalizedContentByPath(path, locale, baseUrl),
 )
-
-// Resolves an absolute or relative URL string to just the pathname.
-function toPathname(raw: string | null | undefined): string | null {
-  if (!raw) return null
-  try {
-    return raw.startsWith('http') ? new URL(raw).pathname : raw
-  } catch {
-    return raw.startsWith('/') ? raw : null
-  }
-}
 
 // Recursively walks a Visual Builder composition tree and collects all
 // OT_AccordionBlock question/answer pairs. Used to populate FAQPage
@@ -203,6 +197,59 @@ async function CmsPage({ params, searchParams }: Props) {
   // getSiteSettings is React cache()-wrapped — no extra round-trip.
   const settings = await getSiteSettings(domain, locale)
 
+  // ── External preview context ────────────────────────────────────────────────
+  // ext_preview=1 means this was reached via an External Preview Link (the
+  // reviewer followed the shareable URL, not the CMS editor's own preview
+  // frame). Require an actual preview_token for CMS edit so a stale draft-mode
+  // cookie on the public site never triggers editor-only UI.
+  const isExternalPreview = dm.isEnabled && sp_str('ext_preview') === '1'
+  const isCmsEdit         = dm.isEnabled && !!sp_str('preview_token') && !isExternalPreview
+
+  // Draft banner for external reviewers + shareable-link panel for CMS editors.
+  // Applies to every page type; the link only appears when the page has
+  // enableExternalPreview: true.
+  const renderPreviewChrome = (content: PreviewableContent | null | undefined, banner: { headline?: string | null; topic?: string | null; authorName?: string }) => {
+    const externalPreviewUrl = isCmsEdit
+      ? buildExternalPreviewUrl({
+          enabled:      content?.enableExternalPreview,
+          baseUrl,
+          previewToken: sp_str('preview_token'),
+          key:          sp_str('key'),
+          ver:          sp_str('ver'),
+          loc:          sp_str('loc') || locale,
+          path:         contentPathname(content) ?? path,
+        })
+      : null
+    return (
+      <>
+        {isExternalPreview && (
+          <DraftStateBanner
+            headline={banner.headline ?? ''}
+            topic={banner.topic ?? undefined}
+            version={sp_str('ver') || undefined}
+            locale={sp_str('loc')  || locale}
+            authorName={banner.authorName}
+          />
+        )}
+        {isExternalPreview && sp_str('key') && reviewCommentsEnabled() && (
+          <ReviewCommentWidget
+            contentKey={sp_str('key')}
+            version={sp_str('ver')}
+            locale={sp_str('loc') || locale}
+            path={contentPathname(content) ?? path}
+            title={banner.headline ?? undefined}
+          />
+        )}
+        {externalPreviewUrl && (
+          <>
+            <ExternalPreviewLinkPanel url={externalPreviewUrl} topic={banner.topic ?? undefined} />
+            <ReviewCommentsStrip contentKey={sp_str('key')} />
+          </>
+        )}
+      </>
+    )
+  }
+
   // Full page URL for JSON-LD — prefer the configured site URL so canonical
   // references in structured data always point to the production domain.
   const siteOrigin  = process.env.NEXT_PUBLIC_SITE_URL ?? baseUrl
@@ -309,13 +356,6 @@ async function CmsPage({ params, searchParams }: Props) {
       const latestPosts = await getLatestBlogPosts(contentKey, locale, baseUrl)
 
       if (blogContent) {
-        // ── Draft mode context ──────────────────────────────────────────────────
-        // ext_preview=1 means this was reached via an External Preview Link
-        // (the reviewer followed the shareable URL, not the CMS editor's own
-        // preview frame). Without this flag, dm.isEnabled means CMS edit mode.
-        const isExternalPreview = dm.isEnabled && sp_str('ext_preview') === '1'
-        const isCmsEdit         = dm.isEnabled && !!sp_str('preview_token') && !isExternalPreview
-
         // ── Author name for the draft banner ────────────────────────────────────
         // In preview mode blogContent comes from getPreviewContent which returns
         // the raw ContentReference (just { key }), not the resolved AuthorData.
@@ -328,32 +368,6 @@ async function CmsPage({ params, searchParams }: Props) {
             draftAuthorName = (await getAuthorName(authorKey)) ?? undefined
           }
         }
-
-        // ── CMS-side external preview link ──────────────────────────────────────
-        // Shown in the slug route when the CMS editor is viewing the blog page
-        // in draft mode and the content has enableExternalPreview: true.
-        // (Also shown in /preview page via ExternalPreviewLinkPanel — this
-        // covers the case where the CMS opens the draft through the slug URL.)
-        let externalPreviewUrl: string | null = null
-        if (isCmsEdit && blogContent.enableExternalPreview === true) {
-          const contentSlug = toPathname(
-            blogContent._metadata?.url?.hierarchical ??
-            blogContent._metadata?.url?.default
-          ) ?? path
-
-          const qs = new URLSearchParams({
-            preview_token: sp_str('preview_token'),
-            key:           sp_str('key'),
-            ver:           sp_str('ver'),
-            loc:           sp_str('loc') || locale,
-            ctx:           contentSlug,
-            ext_preview:   '1',
-          })
-          if (baseUrl) {
-            externalPreviewUrl = `${baseUrl}/api/draft?${qs}`
-          }
-        }
-        // ───────────────────────────────────────────────────────────────────────
 
         const blogJsonLd = buildJsonLd(
           blogContent as PageSeoFields,
@@ -369,24 +383,11 @@ async function CmsPage({ params, searchParams }: Props) {
             )}
             {dm.isEnabled && <NextPreviewComponent />}
 
-            {/* External reviewer's draft-state banner */}
-            {isExternalPreview && (
-              <DraftStateBanner
-                headline={blogContent.headline ?? ''}
-                topic={blogContent.topic    ?? undefined}
-                version={sp_str('ver')      || undefined}
-                locale={sp_str('loc')       || locale}
-                authorName={draftAuthorName}
-              />
-            )}
-
-            {/* CMS editor's shareable-link panel */}
-            {externalPreviewUrl && (
-              <ExternalPreviewLinkPanel
-                url={externalPreviewUrl}
-                topic={blogContent.topic ?? undefined}
-              />
-            )}
+            {renderPreviewChrome(blogContent, {
+              headline:   blogContent.headline,
+              topic:      blogContent.topic,
+              authorName: draftAuthorName,
+            })}
 
             <BlogPage content={blogContent} latestPosts={latestPosts} />
           </>
@@ -418,30 +419,6 @@ async function CmsPage({ params, searchParams }: Props) {
       }
       if (!campaignContent) return notFound()
 
-      // Require an actual preview_token so a stale draft-mode cookie on the
-      // public site never triggers editor-only UI (ExternalPreviewLinkPanel).
-      const isExternalPreview = dm.isEnabled && sp_str('ext_preview') === '1'
-      const isCmsEdit         = dm.isEnabled && !!sp_str('preview_token') && !isExternalPreview
-
-      let externalPreviewUrl: string | null = null
-      if (isCmsEdit && campaignContent.enableExternalPreview === true) {
-        const contentSlug = toPathname(
-          campaignContent._metadata?.url?.default
-        ) ?? path
-
-        const qs = new URLSearchParams({
-          preview_token: sp_str('preview_token'),
-          key:           sp_str('key'),
-          ver:           sp_str('ver'),
-          loc:           sp_str('loc') || locale,
-          ctx:           contentSlug,
-          ext_preview:   '1',
-        })
-        if (baseUrl) {
-          externalPreviewUrl = `${baseUrl}/api/draft?${qs}`
-        }
-      }
-
       const campaignJsonLd = buildJsonLd(
         campaignContent as PageSeoFields,
         settings ?? {},
@@ -456,17 +433,9 @@ async function CmsPage({ params, searchParams }: Props) {
           )}
           {dm.isEnabled && <NextPreviewComponent />}
 
-          {isExternalPreview && (
-            <DraftStateBanner
-              headline={campaignContent.seoTitle ?? campaignContent.heroSection?.headline ?? ''}
-              version={sp_str('ver') || undefined}
-              locale={sp_str('loc')  || locale}
-            />
-          )}
-
-          {externalPreviewUrl && (
-            <ExternalPreviewLinkPanel url={externalPreviewUrl} />
-          )}
+          {renderPreviewChrome(campaignContent, {
+            headline: campaignContent.seoTitle ?? campaignContent.heroSection?.headline,
+          })}
 
           <CampaignPage
             heroSection={campaignContent.heroSection ?? undefined}
@@ -499,6 +468,7 @@ async function CmsPage({ params, searchParams }: Props) {
               <Script src={`${cmsUrl}/util/javascript/communicationinjector.js`} />
             )}
             {dm.isEnabled && <NextPreviewComponent />}
+            {renderPreviewChrome(eventContent, { headline: eventContent.title })}
             <EventPage content={eventContent as any} />
           </>
         )
@@ -519,6 +489,7 @@ async function CmsPage({ params, searchParams }: Props) {
               <Script src={`${cmsUrl}/util/javascript/communicationinjector.js`} />
             )}
             {dm.isEnabled && <NextPreviewComponent />}
+            {renderPreviewChrome(hubContent, { headline: hubContent.headerName ?? hubContent.seoTitle })}
             <TopicHubPage config={hubContent as any} />
           </>
         )
@@ -571,6 +542,9 @@ async function CmsPage({ params, searchParams }: Props) {
           <Script src={`${cmsUrl}/util/javascript/communicationinjector.js`} />
         )}
         {dm.isEnabled && <NextPreviewComponent />}
+        {renderPreviewChrome(exp, {
+          headline: exp.seoTitle ?? (practitioner ? practitionerName(practitioner, false) : null),
+        })}
         {practitioner && (
           <>
             <PractitionerHeader
@@ -604,6 +578,7 @@ async function CmsPage({ params, searchParams }: Props) {
         <Script src={`${cmsUrl}/util/javascript/communicationinjector.js`} />
       )}
       {dm.isEnabled && <NextPreviewComponent />}
+      {renderPreviewChrome(exp, { headline: exp.seoTitle ?? exp._metadata?.displayName })}
       <CompositionRenderer nodes={exp.composition.nodes} />
     </>
   )

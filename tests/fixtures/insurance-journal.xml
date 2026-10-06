@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"
+	xmlns:content="http://purl.org/rss/1.0/modules/content/"
+	xmlns:wfw="http://wellformedweb.org/CommentAPI/"
+	xmlns:dc="http://purl.org/dc/elements/1.1/"
+	xmlns:atom="http://www.w3.org/2005/Atom"
+	xmlns:sy="http://purl.org/rss/1.0/modules/syndication/"
+	xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+	>
+
+<channel>
+	<title>News Archives - Insurance Journal</title>
+	<atom:link href="http://www.insurancejournal.com/rss/news" rel="self" type="application/rss+xml" />
+	<link>https://www.insurancejournal.com/news/</link>
+	<description>Insurance Journal delivers the latest business news for the Property/Casualty insurance industry</description>
+	<lastBuildDate>Fri, 02 Oct 2026 12:53:21 +0000</lastBuildDate>
+	<language>en-US</language>
+	<sy:updatePeriod>
+	hourly	</sy:updatePeriod>
+	<sy:updateFrequency>
+	1	</sy:updateFrequency>
+	<generator>https://wordpress.org/?v=7.1.2</generator>
+
+<image>
+	<url>https://www.insurancejournal.com/app/uploads/2015/12/cropped-insurancejournal-32x32.jpg</url>
+	<title>News Archives - Insurance Journal</title>
+	<link>https://www.insurancejournal.com/news/</link>
+	<width>32</width>
+	<height>32</height>
+</image> 
+	<item>
+		<title>AI Tools Suspected in Korea&#8217;s Shinhan Bank Hack, Yonhap News Reports</title>
+		<link>https://www.insurancejournal.com/news/international/2026/10/02/887749.htm</link>
+		
+					<dc:creator><![CDATA[Admin]]></dc:creator>
+					<pubDate>Fri, 02 Oct 2026 12:51:47 +0000</pubDate>
+				<category><![CDATA[International & Reinsurance News]]></category>
+		<category><![CDATA[AI risk]]></category>
+		<category><![CDATA[artificial intelligence (AI)]]></category>
+		<category><![CDATA[cyber]]></category>
+		<category><![CDATA[cyber attacks]]></category>
+		<category><![CDATA[South Korea cyber attacks]]></category>
+		<guid isPermaLink="false">https://www.insurancejournal.com/?p=887749</guid>
+
+							<description><![CDATA[Advanced artificial intelligence tools may have been used in a cyberattack on South Korea&#8217;s Shinhan Bank Co. that exposed information on about 25,000 customers, Yonhap News reported, highlighting the risk of automated hacking against financial institutions. Attackers probably used sophisticated &#8230;]]></description>
+		
+		
+		
+		<enclosure url="https://www.insurancejournal.com/app/uploads/2026/10/shinhan-bank-logo-bloomberg-580x381.jpg" length="35330" type="image/jpeg" />	</item>
+<item>
+		<title>To Shield Its Parishes, Vermont Diocese Wants to Pull Its Bankruptcy Filing</title>
+		<link>https://www.insurancejournal.com/news/east/2026/10/02/887702.htm</link>
+		
+					<dc:creator><![CDATA[Andrew G. Simpson]]></dc:creator>
+					<pubDate>Fri, 02 Oct 2026 12:21:56 +0000</pubDate>
+				<category><![CDATA[East News]]></category>
+		<category><![CDATA[bankruptcy]]></category>
+		<category><![CDATA[Catholic Church liability]]></category>
+		<category><![CDATA[clergy sexual abuse]]></category>
+		<guid isPermaLink="false">https://www.insurancejournal.com/?p=887702</guid>
+
+							<description><![CDATA[Facing a ruling that could expose its local parishes and schools to liability, no progress in settlement talks, and rising litigation costs, the Roman Catholic Diocese of Burlington, Vermont has taken the unusual step of asking the U.S. bankruptcy court &#8230;]]></description>
+		
+		
+		
+			</item>
+<item>
+		<title>California AG Bonta Issues Subpoena to OpenAI over AI Cybersecurity Risks</title>
+		<link>https://www.insurancejournal.com/news/west/2026/10/02/887757.htm</link>
+		
+				<pubDate>Fri, 02 Oct 2026 12:19:29 +0000</pubDate>
+				<category><![CDATA[West News]]></category>
+		<category><![CDATA[AI]]></category>
+		<guid isPermaLink="false">https://www.insurancejournal.com/?p=887757</guid>
+
+							<description><![CDATA[California Attorney General Rob Bonta has issued an investigative subpoena to OpenAI, as part of a broader inquiry into cybersecurity incidents and risks related to its AI models, his office said on Thursday. Last month, Bonta announced that the Department &#8230;]]></description>
+		
+		
+		
+			</item>
+	</channel>
+</rss>

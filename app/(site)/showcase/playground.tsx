@@ -58,7 +58,7 @@ export function BlockPlayground({ controls, defaults, children }: BlockPlaygroun
       <div className="px-md pt-md pb-sm lg:px-lg border-t border-fg/10 flex flex-wrap items-center gap-x-lg gap-y-sm">
         {visibleControls.map(control => (
           <div key={control.key} className="flex items-center gap-sm">
-            <span className="text-label tracking-label uppercase text-fg-muted/50 font-semibold shrink-0 select-none">
+            <span className="text-label tracking-label uppercase text-fg-muted font-semibold shrink-0 select-none">
               {control.label}
             </span>
 
@@ -100,7 +100,7 @@ export function BlockPlayground({ controls, defaults, children }: BlockPlaygroun
         {isDirty && (
           <button
             onClick={reset}
-            className="flex items-center gap-xs text-label text-fg-muted/50 hover:text-fg-muted transition-colors duration-100 ml-auto"
+            className="flex items-center gap-xs text-label text-fg-muted hover:text-fg transition-colors duration-100 ml-auto"
             aria-label="Reset to defaults"
           >
             <RotateCcw size={11} />
@@ -111,7 +111,7 @@ export function BlockPlayground({ controls, defaults, children }: BlockPlaygroun
 
       {/* ── State readout ─────────────────────────────────────────────────── */}
       <div className="px-md pb-sm lg:px-lg">
-        <span className="font-mono text-label text-fg-muted/30 select-none">{stateLabel}</span>
+        <span className="font-mono text-label text-fg-muted/70 select-none">{stateLabel}</span>
       </div>
 
       {/* ── Block preview ─────────────────────────────────────────────────── */}

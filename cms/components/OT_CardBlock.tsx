@@ -3,6 +3,7 @@ import { getPreviewUtils } from '@optimizely/cms-sdk/react/server'
 import { OT_CardBlock as OT_CardBlockContentType } from '@/cms/content-types/OT_CardBlock'
 import { getCardStyles } from '@/cms/styling/OT_CardBlock.styling'
 import CardBlock from '@/components/blocks/CardBlock'
+import { richTextJson } from '@/lib/richTextJson'
 
 type Props = {
   content: ContentProps<typeof OT_CardBlockContentType>
@@ -19,7 +20,7 @@ export default function OT_CardBlock({ content, displaySettings = {} }: Props) {
       <CardBlock
         heading={content.Heading ?? ''}
         eyebrow={content.Eyebrow ?? undefined}
-        description={content.Description?.json ?? undefined}
+        description={richTextJson(content.Description)}
         image={
           imageSrc
             ? { src: imageSrc, alt: content.imageAlt ?? '' }

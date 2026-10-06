@@ -144,9 +144,12 @@ export default function CalloutBlockClient({
 
   // ── Padding ───────────────────────────────────────────────────────────────
   // Bar uses generous py-md for enough visual mass to register during a page scan.
+  // Filled/Bordered get roomier interior padding than Bar — they're meant to read
+  // as a self-contained card, not a slim inline strip, especially when dropped
+  // directly as a section with nothing else supplying that breathing room.
   const padClass = isBar
     ? 'px-md py-md'
-    : (size === 'compact' ? 'px-md py-sm' : 'px-md py-md')
+    : (size === 'compact' ? 'px-lg py-md' : 'px-lg py-lg')
 
   // ── Text colors ───────────────────────────────────────────────────────────
   const headingClass = isBrand ? 'text-fg-on-brand' : 'text-fg'
@@ -286,8 +289,12 @@ export default function CalloutBlockClient({
     </div>
   )
 
+  // Upper/lower margin — Filled/Bordered are the variants most often dropped
+  // directly as their own section (no Row/Column supplying vertical rhythm),
+  // where they'd otherwise butt straight up against whatever sits above/below.
+  // Bar is exempt: it's meant to sit flush (e.g. a sticky top-of-page notice).
   const calloutContent = (
-    <div className={cn('w-full', maxWidthWrapper)}>{calloutInner}</div>
+    <div className={cn('w-full my-xl', maxWidthWrapper)}>{calloutInner}</div>
   )
 
   if (!dismissible) return calloutContent

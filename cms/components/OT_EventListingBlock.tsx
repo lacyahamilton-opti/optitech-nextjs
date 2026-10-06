@@ -1,3 +1,4 @@
+import { draftMode } from 'next/headers'
 import { ContentProps } from '@optimizely/cms-sdk'
 import { getPreviewUtils } from '@optimizely/cms-sdk/react/server'
 import { OT_EventListingBlock as OT_EventListingBlockContentType } from '@/cms/content-types/OT_EventListingBlock'
@@ -20,6 +21,11 @@ export default async function OT_EventListingBlockAdapter({
   displaySettings = {},
 }: Props) {
   const { pa } = getPreviewUtils(content)
+  // Live-front-end-only feature — see the matching note in OT_BlogFeedBlock.tsx.
+  // Both signals are checked independently; Visual Builder doesn't always
+  // carry the Next.js draft-mode cookie, so draftMode() alone isn't trusted.
+  const { isEnabled: draftModeEnabled } = await draftMode()
+  const isPreview = draftModeEnabled || content.__context?.edit === true
 
   const styleOptions = getEventListingStyles(content.defaultView ? { ...displaySettings, defaultView: content.defaultView } : displaySettings)
 
@@ -52,6 +58,7 @@ export default async function OT_EventListingBlockAdapter({
         filterByType={filterByType}
         maxItems={maxItems}
         styleOptions={styleOptions}
+        isPreview={isPreview}
         pa={pa}
       />
     </div>

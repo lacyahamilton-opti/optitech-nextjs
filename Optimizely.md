@@ -96,7 +96,7 @@ export const OT_HeroBlock = contentType({
 | `type` | GraphQL shape | Notes |
 |---|---|---|
 | `string` | plain scalar | Also supports `format: 'selectOne'` with an `enum` list for dropdowns |
-| `richText` | `{ html, json }` | Full rich-text editor (TinyMCE). Access `.json` in adapters and render with `<RichText content={content.body?.json ?? undefined} />` from `@optimizely/cms-sdk/react/richText`. Never use `.html` with `dangerouslySetInnerHTML`. |
+| `richText` | `{ html, json }` | Full rich-text editor (TinyMCE). Access `.json` in adapters and render with `<RichText content={richTextJson(content.body)} />` from `@optimizely/cms-sdk/react/richText`. Never use `.html` with `dangerouslySetInnerHTML`. |
 | `url` | `InferredUrl` object | Shape: `{ default, hierarchical, internal, graph, base, type }` — all string or null. Use `content.myField?.default` for the plain URL string. Never treat this as a plain string; accessing it as `String(content.myField)` will give `[object Object]`. |
 | `contentReference` | `InferredContentReference` object | Shape: `{ url: InferredUrl, item, key }`. Use `src(field)` from `getPreviewUtils` to extract the URL, or access `.url?.default` directly. For content references that have sub-item metadata (e.g. `articleRoot`), the URL is at `.url?.hierarchical`, not `._metadata.url`. |
 | `link` | `{ text, title, target, url: InferredUrl }` | For CTAs and navigation links. The href is `field?.url?.default`; always add `rel="noopener noreferrer"` when `target === '_blank'`. |
@@ -676,7 +676,7 @@ A `type: 'richText'` property returns `{ html, json }` from GraphQL. Always use 
 
 ```tsx
 // In the adapter — pass json to the UI component:
-body={content.body?.json ?? undefined}
+body={richTextJson(content.body)}
 
 // In the React component — render with the SDK component:
 import { RichText } from '@optimizely/cms-sdk/react/richText'

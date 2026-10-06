@@ -10,6 +10,8 @@ export type LocationListingBlockProps = {
   locations:     LocationData[]
   emptyMessage?: string
   styleOptions:  LocationListingStyleOptions
+  /** True for any CMS draft/preview render (Visual Builder, draft links) — hides the filter drawer. */
+  isPreview?:    boolean
   /** Preview-attribute factory from getPreviewUtils — server context only. */
   pa?:           (prop: string) => Record<string, unknown>
 }
@@ -43,6 +45,7 @@ export default async function LocationListingBlock({
   locations,
   emptyMessage,
   styleOptions,
+  isPreview = false,
   pa = () => ({}),
 }: LocationListingBlockProps) {
   const sectionBg = styleOptions.color === 'surface' ? 'bg-surface' : 'bg-canvas'
@@ -74,6 +77,7 @@ export default async function LocationListingBlock({
           styleOptions={styleOptions}
           mapboxToken={token}
           emptyMessage={emptyMessage?.trim() || 'No locations found.'}
+          isPreview={isPreview}
         />
       </div>
     </section>

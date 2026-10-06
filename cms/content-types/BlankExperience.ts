@@ -1,4 +1,5 @@
 import { contentType } from '@optimizely/cms-sdk'
+import { enableExternalPreviewProperty } from './_shared/externalPreview'
 
 export const BlankExperience = contentType({
   key: 'BlankExperience',
@@ -6,6 +7,8 @@ export const BlankExperience = contentType({
   baseType: '_experience',
   mayContainTypes: ['*'], // All child content types allowed
   properties: {
+    enableExternalPreview: enableExternalPreviewProperty,
+
     // ── SEO / Search & Discovery ──────────────────────────────────────────────
     // Identical field keys to OT_BlogPage so lib/metadata.ts has one code path.
     seoTitle: {

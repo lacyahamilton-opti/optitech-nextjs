@@ -1,6 +1,7 @@
 import { contentType } from '@optimizely/cms-sdk'
 import { OT_EventSpeaker } from './OT_EventSpeaker'
 import { OT_AgendaItem }   from './OT_AgendaItem'
+import { enableExternalPreviewProperty } from './_shared/externalPreview'
 
 // ─── OT_EventPage ───────────────────────────────────────────────────────────────
 // A traditional CMS page (URL-addressable) representing a single event — webinar,
@@ -21,6 +22,8 @@ export const OT_EventPage = contentType({
   baseType:    '_page',
   mayContainTypes: ['*'], // All child content types allowed
   properties: {
+    enableExternalPreview: enableExternalPreviewProperty,
+
     // ── Core content ──────────────────────────────────────────────────────────
     title: {
       type:        'string',
@@ -150,50 +153,6 @@ export const OT_EventPage = contentType({
       description: 'Where attendees register or join. Drives the primary CTA on the event page and card.',
       group:       'OT_Content',
       sortOrder:   130,
-    },
-
-    // ── Access restrictions ──────────────────────────────────────────────────────
-    // Controls content-gating on the event page. When set to 'bankMember',
-    // non-authenticated visitors see only the first paragraph + a sign-in prompt.
-    // The aba_member_session cookie (set by MemberAuth) is used for client-side
-    // gating — this is a demo-fidelity simulation, not a security boundary.
-    restrictions: {
-      type:        'string',
-      format:      'selectOne',
-      displayName: 'Restrictions',
-      description: "Content access level. 'Member' gates the full event details behind the ABA member sign-in flow.",
-      group:       'OT_Content',
-      sortOrder:   135,
-      enum: [
-        { value: 'none',       displayName: 'None' },
-        { value: 'bankMember', displayName: 'Member' },
-      ],
-    },
-
-    // ── Commerce (AMS simulation) ────────────────────────────────────────────────
-    // In production these would be sourced from Nimble AMS. In the demo they are
-    // authored directly in the CMS. When pricing is set, the event page renders
-    // a commerce sidebar section with member/non-member pricing and an Add to Cart CTA.
-    productId: {
-      type:        'string',
-      displayName: 'Product ID',
-      description: 'The AMS product identifier (e.g. ABAWebID0011492). Displayed on the event page commerce section.',
-      group:       'OT_Content',
-      sortOrder:   10,
-    },
-    nonMemberPrice: {
-      type:        'string',
-      displayName: 'Non-Member Price',
-      description: 'Formatted price string for non-members (e.g. $310.00). Leave blank for free events.',
-      group:       'OT_Content',
-      sortOrder:   20,
-    },
-    memberPrice: {
-      type:        'string',
-      displayName: 'Member Price',
-      description: 'Formatted price string for ABA members (e.g. $210.00). Highlighted when visitor is signed in as a member.',
-      group:       'OT_Content',
-      sortOrder:   30,
     },
 
     // ── Speakers & Agenda ───────────────────────────────────────────────────────

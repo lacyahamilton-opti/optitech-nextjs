@@ -1,4 +1,5 @@
 import type { TabItemData } from '@/components/blocks/TabsBlock'
+import { richTextJson } from '@/lib/richTextJson'
 
 /**
  * Maps one OT_TabItem / OT_TabItemBlock content object into the flat
@@ -15,7 +16,7 @@ export function buildTabItemFromContent(item: any, src: (ref: any) => string | u
     heading:   item?.heading         ?? undefined,
     // CMS delivers rich text as { json }; showcase/mock data passes a plain
     // string or a ready-made imageSrc — accept both shapes.
-    body:      item?.body?.json ?? (typeof item?.body === 'string' ? item.body : undefined),
+    body:      richTextJson(item?.body) ?? (typeof item?.body === 'string' ? item.body : undefined),
     imageSrc:  src(item?.image) ?? item?.imageSrc ?? undefined,
     imageAlt:  item?.imageAlt        ?? '',
     ctaLabel:  item?.ctaLabel        ?? undefined,

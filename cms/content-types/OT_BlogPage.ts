@@ -1,5 +1,6 @@
 import { contentType } from '@optimizely/cms-sdk'
 import { OT_Author } from './OT_Author'
+import { enableExternalPreviewProperty } from './_shared/externalPreview'
 
 export const OT_BlogPage = contentType({
   key: 'OT_BlogPage',
@@ -7,13 +8,7 @@ export const OT_BlogPage = contentType({
   baseType: '_page',
   mayContainTypes: ['*'], // All child content types allowed
   properties: {
-    enableExternalPreview: {
-      type: 'boolean',
-      displayName: 'Enable External Preview Link',
-      description: 'When enabled, a shareable preview link is generated in the CMS editor so reviewers can view this draft in the live front-end without a CMS login.',
-      group: 'OT_Content',
-      sortOrder: 5,
-    },
+    enableExternalPreview: enableExternalPreviewProperty,
     blogStyle: {
       type: 'string',
       format: 'selectOne',

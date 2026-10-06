@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">
+  <title>Insurance Business</title>
+  <entry>
+    <title>
+      Carriers tighten catastrophe &amp; wildfire underwriting
+    </title>
+    <link rel="self" href="https://www.insurancebusinessmag.com/us/feed-self"/>
+    <link rel="alternate" type="text/html" href="https://www.insurancebusinessmag.com/us/news/a-1?utm_source=rss&amp;utm_medium=feed&amp;id=7"/>
+    <id>tag:insurancebusinessmag.com,2026:a-1</id>
+    <published>2026-09-30T08:15:00-04:00</published>
+    <updated>2026-09-30T09:00:00Z</updated>
+    <summary type="html">&lt;p&gt;Underwriters are rethinking &lt;b&gt;wildfire&lt;/b&gt; exposure.&lt;/p&gt;</summary>
+    <media:thumbnail url="https://cdn.example-insurance.com/a-1.jpg"/>
+  </entry>
+  <entry>
+    <title>Second entry, first link without rel</title>
+    <link href="https://www.insurancebusinessmag.com/us/news/a-2"/>
+    <id>tag:insurancebusinessmag.com,2026:a-2</id>
+    <updated>2026-09-29T12:00:00Z</updated>
+    <content type="html">Plain content body.</content>
+  </entry>
+</feed>

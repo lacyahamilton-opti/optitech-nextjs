@@ -3,6 +3,7 @@ import { getPreviewUtils }        from '@optimizely/cms-sdk/react/server'
 import { OT_BannerBlock as OT_BannerBlockContentType } from '@/cms/content-types/OT_BannerBlock'
 import { getBannerStyles }        from '@/cms/styling/OT_BannerBlock.styling'
 import BannerBlock                from '@/components/blocks/BannerBlock'
+import { richTextJson } from '@/lib/richTextJson'
 
 type Props = {
   content:          ContentProps<typeof OT_BannerBlockContentType>
@@ -19,7 +20,7 @@ export default function OT_BannerBlock({ content, displaySettings = {} }: Props)
         heading={content.heading ?? ''}
         headingLevel={(content.headingLevel as 'h1' | 'h2' | undefined) ?? 'h2'}
         eyebrow={content.eyebrow ?? undefined}
-        body={content.body?.json ?? undefined}
+        body={richTextJson(content.body)}
         bgImageSrc={src(content.backgroundImage) ?? undefined}
         bgVideoSrc={src(content.backgroundVideo) ?? undefined}
         primaryCta={

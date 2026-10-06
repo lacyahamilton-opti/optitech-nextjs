@@ -20,7 +20,7 @@ export const OT_ThemeManager = contentType({
 
     // Logo
     logo:           { type: 'contentReference', allowedTypes: ['_image'], displayName: 'Logo',                                          group: 'OT_Content', sortOrder: 5   },
-    logoAlt:        { type: 'string', maxLength: 100,   displayName: 'Logo Alt Text',                                   group: 'OT_Content', sortOrder: 10  },
+    logoAlt:        { type: 'string', isLocalized: true, maxLength: 100,   displayName: 'Logo Alt Text',                                   group: 'OT_Content', sortOrder: 10  },
     logoFit: {
       type: 'string',
       format: 'selectOne',
@@ -48,7 +48,8 @@ export const OT_ThemeManager = contentType({
     },
 
     // Header CTA
-    ctaLabel: { type: 'string', maxLength: 40, displayName: 'CTA Label', group: 'OT_Content', sortOrder: 20 },
+    ctaLabel: { type: 'string', isLocalized: true, maxLength: 40, displayName: 'CTA Label', group: 'OT_Content', sortOrder: 20 },
+    // Shared — Header locale-prefixes the resolved path, so one URL serves every locale.
     ctaUrl:   { type: 'url',   displayName: 'CTA URL',   group: 'OT_Content', sortOrder: 30 },
 
     // Search
@@ -66,8 +67,11 @@ export const OT_ThemeManager = contentType({
     },
 
     // Header Navigation
+    // Localized at the array level (like OT_FooterBlock.links) — `link` properties
+    // can't carry isLocalized themselves, so each locale owns its whole nav tree.
     primaryNavigation: {
       type: 'array',
+      isLocalized: true,
       displayName: 'Primary Navigation',
       description: 'Top-level nav links. Each item uses a native Link picker (supports internal pages, external URLs, and DAM files). Add Sub-Navigation Items inside each entry to create a dropdown.',
       group: 'OT_Content',
@@ -170,6 +174,7 @@ export const OT_ThemeManager = contentType({
     // ── SEO / Search & Discovery ──────────────────────────────────────────────
     siteName: {
       type: 'string',
+      isLocalized: true,
       displayName: 'Site Name',
       description: 'Used in the browser tab title template ("Page Title | Site Name") and og:site_name.',
       group: 'OT_SEO',
@@ -177,6 +182,7 @@ export const OT_ThemeManager = contentType({
     },
     defaultSeoDescription: {
       type: 'string',
+      isLocalized: true,
       displayName: 'Default Meta Description',
       description: 'Fallback description for pages that have no Meta Description set.',
       group: 'OT_SEO',
@@ -199,6 +205,7 @@ export const OT_ThemeManager = contentType({
     },
     organizationDescription: {
       type: 'string',
+      isLocalized: true,
       displayName: 'Organization Summary',
       description: 'One or two sentences describing the organization. Injected into the Organization JSON-LD block on every page — used by AI engines to establish entity identity.',
       group: 'OT_SEO',

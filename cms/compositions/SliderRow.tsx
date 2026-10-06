@@ -1,8 +1,9 @@
 'use client'
 
-import { Children, useCallback, useEffect, useRef, useState } from 'react'
+import { Children } from 'react'
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
+import { useSliderEngine } from '@/components/blocks/slider-styles/useSliderEngine'
 
 const AUTOPLAY_MS: Record<string, number> = { slow: 8000, medium: 5000, fast: 3000 }
 
@@ -22,8 +23,7 @@ const PEEK_INSET: Record<string, string> = {
 
 // Gap between slides, keyed to the row's Content Spacing dropdown. Applied as a
 // per-slide gutter (half on each side) + a matching negative margin on the track
-// so the outer slides still align flush with the container edge. Slides stay
-// w-full, so the translateX(-active * 100%) step math is unaffected.
+// so the outer slides still align flush with the container edge.
 const GAP_VAR: Record<string, string> = {
   none:   '0px',
   small:  'var(--spacing-sm)',
@@ -59,73 +59,68 @@ export default function SliderRow({
   paProps         = {},
   staggerAttr,
 }: Props) {
-  const slides      = Children.toArray(children)
-  const count       = slides.length
-  const [active, setActive] = useState(0)
-  const bounceDir   = useRef<1 | -1>(1)
-  const timerRef    = useRef<ReturnType<typeof setInterval> | null>(null)
-
-  const clamp = (n: number) => Math.max(0, Math.min(n, count - 1))
-  const wrap  = (n: number) => ((n % count) + count) % count
-
-  const goTo = useCallback((next: number) => {
-    setActive(loop === 'loop' ? wrap(next) : clamp(next))
-  }, [count, loop]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const advance = useCallback(() => {
-    setActive(prev => {
-      if (loop === 'bounce') {
-        if (prev >= count - 1) bounceDir.current = -1
-        if (prev <= 0)         bounceDir.current = 1
-        return clamp(prev + bounceDir.current)
-      }
-      return loop === 'loop' ? wrap(prev + 1) : clamp(prev + 1)
-    })
-  }, [count, loop]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const stopTimer  = () => { if (timerRef.current) clearInterval(timerRef.current) }
-  const startTimer = useCallback(() => {
-    stopTimer()
-    if (autoplay === 'off') return
-    timerRef.current = setInterval(advance, AUTOPLAY_MS[autoplay] ?? 5000)
-  }, [autoplay, advance])
-
-  useEffect(() => { startTimer(); return stopTimer }, [startTimer])
-
-  const handleNav = (next: number) => { goTo(next); startTimer() }
-
-  const showArrows  = controls === 'both' || controls === 'arrows'
-  const showDots    = controls === 'both' || controls === 'dots'
+  const slides = Children.toArray(children)
+  const count  = slides.length
   const isFadeBased = transition === 'fade' || transition === 'morph'
-  const hasPeek     = peek !== 'none'
-  const gapValue    = GAP_VAR[gap] ?? GAP_VAR.none
-  const hasGap      = gapValue !== GAP_VAR.none
-  const canPrev     = loop !== 'none' || active > 0
-  const canNext     = loop !== 'none' || active < count - 1
+  const hasPeek      = peek !== 'none'
+  const gapValue     = GAP_VAR[gap] ?? GAP_VAR.none
+  const hasGap       = gapValue !== GAP_VAR.none
+
+  // Same Embla-powered engine OT_SliderBlock uses — physics-based drag/swipe,
+  // pause-on-hover/focus/tab-hidden autoplay, prefers-reduced-motion, and
+  // keyboard arrow nav all come from here rather than being reimplemented.
+  // `align: 'center'` only when peeking symmetrically on both sides is what
+  // this style calls for (every SliderBlock style peeks from one side only,
+  // hence that not being the hook's default).
+  const engine = useSliderEngine({
+    slideCount: count,
+    loop:       loop as 'loop' | 'bounce' | 'none',
+    autoPlayMs: autoplay === 'off' ? null : (AUTOPLAY_MS[autoplay] ?? null),
+    ariaLabel:  'Carousel',
+    headlines:  [],
+    align:      hasPeek ? 'center' : 'start',
+  })
+  const { activeIndex, canPrev, canNext, goTo, next, prev, viewportRef, regionProps, reducedMotion } = engine
+
+  const showArrows = controls === 'both' || controls === 'arrows'
+  const showDots   = controls === 'both' || controls === 'dots'
+  // Reduced motion still respects the transition style's identity (a fade
+  // stays a fade, not a hard cut) but collapses its duration, matching every
+  // other style built on this engine.
+  const slideDuration = reducedMotion ? 'duration-150' : (transition === 'morph' ? 'duration-700' : 'duration-500')
 
   return (
     <div
       className={cn('vb:row w-full', bgColorClass, verticalPadding)}
       data-stagger={staggerAttr}
+      {...regionProps}
       {...paProps}
     >
+      <div className="sr-only" aria-live="polite" aria-atomic="true">{engine.announcement}</div>
 
       {/* Track */}
       <div className={cn('relative w-full', PEEK_OUTER[peek])}>
         <div className={cn(hasPeek && PEEK_INSET[peek])}>
           {isFadeBased ? (
-            // Fade / Morph: slides stack; only active is visible
+            // Fade / Morph: Embla still owns index/drag/loop/autoplay via an
+            // invisible track (below); the visible layer is a plain absolute
+            // crossfade, since Embla's own transform isn't what's on screen.
             <div className="relative">
+              <div ref={viewportRef} className="absolute inset-0 overflow-hidden opacity-0 pointer-events-none" aria-hidden="true">
+                <div className="flex h-full">
+                  {slides.map((_, i) => <div key={i} className="flex-[0_0_100%] h-full" />)}
+                </div>
+              </div>
               {slides.map((slide, i) => (
                 <div
                   key={i}
-                  aria-hidden={i !== active}
+                  aria-hidden={i !== activeIndex}
                   className={cn(
                     'w-full',
                     'transition-[opacity,filter,transform]',
                     'ease-[var(--ease-kinetic)]',
-                    transition === 'morph' ? 'duration-700' : 'duration-500',
-                    i === active
+                    slideDuration,
+                    i === activeIndex
                       ? 'relative opacity-100'
                       : [
                           'absolute inset-0 pointer-events-none opacity-0',
@@ -138,31 +133,35 @@ export default function SliderRow({
               ))}
             </div>
           ) : (
-            // Slide / Cover: translate-based track
-            <div
-              className="flex transition-transform ease-[var(--ease-kinetic)] duration-500"
-              style={{
-                transform: `translateX(-${active * 100}%)`,
-                // Negative track margin cancels the outer slides' gutter so the
-                // first/last slides stay flush with the container edge.
-                ...(hasGap ? { marginInline: `calc(${gapValue} / -2)` } : {}),
-              }}
-            >
-              {slides.map((slide, i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    'w-full shrink-0',
-                    transition === 'cover' && cn(
-                      'transition-[transform,opacity] ease-[var(--ease-kinetic)] duration-500',
-                      i !== active && 'scale-[0.88] opacity-40',
-                    ),
-                  )}
-                  style={hasGap ? { paddingInline: `calc(${gapValue} / 2)` } : undefined}
-                >
-                  {slide}
-                </div>
-              ))}
+            // Slide / Cover: Embla's own track *is* the visible carousel —
+            // its physics-based drag/snap directly drives what's on screen,
+            // the same way Cinematic's background wipe reuses its track.
+            // Unlike every SliderBlock style, real text content lives inside
+            // this draggable track (SliderBlock only ever drags over images,
+            // keeping text in a separate overlay) — `select-none` keeps a
+            // drag gesture from starting a text selection instead.
+            <div ref={viewportRef} className="overflow-hidden select-none">
+              <div
+                className="flex"
+                style={hasGap ? { marginInline: `calc(${gapValue} / -2)` } : undefined}
+              >
+                {slides.map((slide, i) => (
+                  <div
+                    key={i}
+                    className={cn(
+                      'w-full shrink-0',
+                      transition === 'cover' && cn(
+                        'transition-[transform,opacity] ease-[var(--ease-kinetic)]',
+                        slideDuration,
+                        i !== activeIndex && 'scale-[0.88] opacity-40',
+                      ),
+                    )}
+                    style={hasGap ? { paddingInline: `calc(${gapValue} / 2)` } : undefined}
+                  >
+                    {slide}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -178,7 +177,7 @@ export default function SliderRow({
         >
           {showArrows && (
             <button
-              onClick={() => handleNav(active - 1)}
+              onClick={prev}
               disabled={!canPrev}
               className="flex items-center justify-center w-9 h-9 rounded-full border border-fg/10 text-fg-muted hover:text-fg hover:border-fg/30 disabled:opacity-25 transition-colors"
               aria-label="Previous slide"
@@ -195,11 +194,11 @@ export default function SliderRow({
                 <button
                   key={i}
                   role="tab"
-                  aria-selected={i === active}
-                  onClick={() => handleNav(i)}
+                  aria-selected={i === activeIndex}
+                  onClick={() => goTo(i)}
                   className={cn(
                     'rounded-full transition-all ease-[var(--ease-kinetic)] duration-300',
-                    i === active
+                    i === activeIndex
                       ? 'w-5 h-[6px] bg-brand'
                       : 'w-[6px] h-[6px] bg-fg/20 hover:bg-fg/40',
                   )}
@@ -211,7 +210,7 @@ export default function SliderRow({
 
           {showArrows && (
             <button
-              onClick={() => handleNav(active + 1)}
+              onClick={next}
               disabled={!canNext}
               className="flex items-center justify-center w-9 h-9 rounded-full border border-fg/10 text-fg-muted hover:text-fg hover:border-fg/30 disabled:opacity-25 transition-colors"
               aria-label="Next slide"

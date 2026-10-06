@@ -11,12 +11,14 @@
     "cms:push": "node scripts/cms-push.mjs",
     "cms:push:dry": "node scripts/cms-push.mjs --dryRun",
     "cms:push:bootstrap": "node scripts/cms-push.mjs --ignore-circular-dependency",
-    "cms:pull": "node --env-file=.env.$(git branch --show-current | tr / -) node_modules/@optimizely/cms-cli/bin/run.js config pull"
+    "cms:pull": "node --env-file=.env.$(git branch --show-current | tr / -) node_modules/@optimizely/cms-cli/bin/run.js config pull",
+    "test": "tsx --test tests/*.test.ts tests/*.test.tsx",
+    "check:feeds": "tsx scripts/check-feeds.ts"
   },
   "dependencies": {
     "@google-cloud/bigquery": "^8.3.1",
-    "@optimizely/cms-cli": "^2.2.0",
-    "@optimizely/cms-sdk": "^2.2.0",
+    "@optimizely/cms-cli": "^3.0.0",
+    "@optimizely/cms-sdk": "^3.0.0",
     "@optimizely/optimizely-sdk": "^6.6.0",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-dialog": "^1.1.15",
@@ -24,6 +26,8 @@
     "@types/mapbox-gl": "^3.5.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "embla-carousel-react": "^8.6.0",
+    "fast-xml-parser": "5.11.2",
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.16.0",
     "mapbox-gl": "^3.25.0",
@@ -47,6 +51,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.5",
     "tailwindcss": "^4.3.0",
+    "tsx": "4.23.15",
     "typescript": "^5"
   }
 }

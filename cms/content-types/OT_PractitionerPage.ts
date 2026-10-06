@@ -1,5 +1,6 @@
 import { contentType } from '@optimizely/cms-sdk'
 import { OT_PractitionerProfile } from './OT_PractitionerProfile'
+import { enableExternalPreviewProperty } from './_shared/externalPreview'
 
 // ─── OT_PractitionerPage ──────────────────────────────────────────────────────
 // A Visual Builder experience page for an individual practitioner. It references
@@ -21,6 +22,8 @@ export const OT_PractitionerPage = contentType({
   baseType:    '_experience',
   mayContainTypes: ['*'], // All child content types allowed
   properties: {
+    enableExternalPreview: enableExternalPreviewProperty,
+
     // ── Content ─────────────────────────────────────────────────────────────
     practitionerRef: {
       type:         'contentReference',

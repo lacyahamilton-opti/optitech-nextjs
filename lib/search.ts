@@ -23,3 +23,17 @@ export type SearchResult = {
    *  a GET request to this URL when the user navigates to the result. */
   _track?: string | null
 }
+
+// ─── Autocomplete ───────────────────────────────────────────────────────────
+// Typeahead suggestions are a single _Content fulltext query (see
+// app/api/search/autocomplete/route.ts) classified into the same three
+// buckets the results list and filter drawer use, so the typeahead panel can
+// group them and offer a "View all <type>" link per group.
+
+export type AutocompleteType = 'Blog' | 'Event' | 'Page'
+
+export type AutocompleteSuggestion = {
+  label: string
+  type:  AutocompleteType
+  url:   string
+}

@@ -11,6 +11,8 @@ export type EventListingBlockProps = {
   /** Caps the card/list views; the calendar always shows the full set. */
   maxItems?:     number
   styleOptions:  EventListingStyleOptions
+  /** True for any CMS draft/preview render (Visual Builder, draft links) — hides the filter drawer. */
+  isPreview?:    boolean
   /** Preview-attribute factory from getPreviewUtils — server context only. */
   pa?:           (prop: string) => Record<string, unknown>
 }
@@ -26,6 +28,7 @@ export default function EventListingBlock({
   filterByType = null,
   maxItems,
   styleOptions,
+  isPreview = false,
   pa = () => ({}),
 }: EventListingBlockProps) {
   const { color } = styleOptions
@@ -69,6 +72,7 @@ export default function EventListingBlock({
           pastMode={styleOptions.showPastEvents}
           typeLocked={!!filterByType}
           nowIso={nowIso}
+          isPreview={isPreview}
         />
       </div>
     </section>

@@ -1,4 +1,5 @@
 import type { FeatureItem } from '@/components/blocks/FeatureTile'
+import { richTextJson } from '@/lib/richTextJson'
 
 export function resolveUrl(v: unknown): string | undefined {
   if (!v) return undefined
@@ -16,7 +17,7 @@ export function resolveUrl(v: unknown): string | undefined {
 export function buildFeatureItemFromContent(content: any): FeatureItem {
   return {
     headline: String(content?.headline ?? ''),
-    body:     content?.body?.json ?? undefined,
+    body:     richTextJson(content?.body),
     ctaLabel: content?.ctaLabel ?? undefined,
     ctaUrl:   resolveUrl(content?.ctaUrl),
     icon:     content?.icon ?? undefined,

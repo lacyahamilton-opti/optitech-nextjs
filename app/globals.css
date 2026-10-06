@@ -211,6 +211,25 @@ html {
   100% { transform: scale(1); }
 }
 
+/* FilterBar — the chip that becomes active (selecting a filter, or clearing
+   one back to "All") catches and settles rather than snapping. Overshoots
+   past 1 before resting, so it reads as a tactile click, not a glitch. */
+@keyframes chipSelect {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(0.93); }
+  70%  { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .animate-chip-select {
+    animation: chipSelect var(--ot-dur-base) var(--ot-ease-quick) both;
+  }
+  .animate-filter-swap {
+    animation: fadeIn var(--ot-dur-base) var(--ot-ease-quick) both;
+  }
+}
+
 /* MultiSelect popover entrance — opacity + short rise, transform-only so no
    layout shift. Gated at the utility via motion-safe:. */
 @keyframes multiselect-in {
@@ -2508,6 +2527,70 @@ body {
   .feature-card-lift:hover { transform: none; }
 }
 
+/* ── Feature grid — ruled layout divider system ───────────────────────────────
+ * The "ruled" layout's row dividers borrow the brand→accent horizon-hairline
+ * motif already used by the split-bar header and mega-menu (see the
+ * ::after comment above .split-shell) rather than a flat neutral line, so the
+ * effect reads as one system instead of a plain table rule. A matching
+ * vertical hairline bisects the two text columns at the md+ breakpoint (where
+ * the ruled grid itself goes two-column), so the layout reads as a ruled
+ * ledger grid instead of two blocks of text floating in open space.
+ *
+ * On a brand-filled section the gradient would vanish into the same-hued
+ * background, so [data-color="brand"] falls back to a neutral fg-on-brand
+ * line instead — same fallback logic DESIGN.md documents for chromatic vs.
+ * neutral shadows.
+ * ─────────────────────────────────────────────────────────────────────────── */
+[data-ruled-row] {
+  border-top: 1px solid transparent;
+  border-image: linear-gradient(to right, transparent, var(--ot-brand) 15%, var(--ot-accent) 85%, transparent) 1;
+  transition: background-color var(--ot-dur-quick) var(--ot-ease-quick);
+}
+[data-ruled-row][data-color="brand"] {
+  border-image: none;
+  border-top-color: oklch(from var(--ot-fg-on-brand) l c h / 0.2);
+}
+
+/* Zebra banding — faint at rest, just enough to read as ledger rows without
+ * competing with the hairlines. Hover deepens the same tint one step further,
+ * so every row (banded or not) signals it's the one under the pointer. */
+[data-ruled-row][data-zebra] {
+  background-color: oklch(from var(--ot-fg) l c h / 0.03);
+}
+[data-ruled-row][data-zebra][data-color="brand"] {
+  background-color: oklch(from var(--ot-fg-on-brand) l c h / 0.05);
+}
+[data-ruled-row]:hover {
+  background-color: oklch(from var(--ot-fg) l c h / 0.06);
+}
+[data-ruled-row][data-color="brand"]:hover {
+  background-color: oklch(from var(--ot-fg-on-brand) l c h / 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-ruled-row] { transition: none; }
+}
+
+[data-ruled-grid] {
+  position: relative;
+}
+@media (min-width: 768px) {
+  [data-ruled-grid]::after {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 50%;
+    width: 1px;
+    /* Otherwise this 1px overlay sits directly on the row's own horizontal
+     * midpoint and silently eats the pointer, so hovering a row exactly on
+     * the line never triggers [data-ruled-row]'s own :hover. */
+    pointer-events: none;
+    background: linear-gradient(to bottom, transparent, var(--ot-brand) 15%, var(--ot-accent) 85%, transparent);
+  }
+  [data-ruled-grid][data-color="brand"]::after {
+    background: oklch(from var(--ot-fg-on-brand) l c h / 0.15);
+  }
+}
+
 /* ── Rich Text Block — treatment containers ────────────────────────────────────
  * These classes reference bloom tokens so they follow CMS theme overrides
  * automatically. All shadow/border/background values are token-derived.
@@ -3051,27 +3134,54 @@ body {
     radial-gradient(ellipse 48% 58% at 6% 94%,  var(--ot-bloom-accent-faint) 0%, transparent 58%);
 }
 
-/* Floating media plate (Spotlight / Drench / Poster): a 1px brand-tinted ring +
- * a chromatic brand bloom shadow with a faint accent second layer. */
-.hero-bloom-plate {
-  position: relative;
-  z-index: 1;
-  background: var(--ot-surface);
+/* Spotlight: a wide content panel leads, paired with a deliberately small,
+ * secondary image — both float on the plain canvas ground (the section itself
+ * never takes the full-bleed color fill Overlap/Diagonal use). */
+
+/* Content panel: grows to fill the lead role, not a fixed split — a 1px
+ * brand-tinted ring + chromatic bloom shadow keeps it reading as a floating
+ * card even when its fill matches the canvas ground (color="canvas"). */
+.hero-spotlight-card {
   box-shadow:
     0 0 0 1px var(--ot-bloom-brand-border),
     0 18px 50px var(--ot-bloom-brand-faint),
-    0 8px 24px oklch(from var(--ot-accent) l c h / 0.10);
+    0 6px 20px oklch(from var(--ot-canvas) l c h / 0.35);
 }
 
-/* Soft halo behind the Spotlight plate so the object reads as genuinely lit. */
-.hero-bloom-halo {
-  position: absolute;
-  inset: -8%;
-  z-index: 0;
-  pointer-events: none;
-  background: radial-gradient(ellipse at 50% 45%, var(--ot-bloom-brand-ring) 0%, transparent 70%);
-  filter: blur(40px);
-  opacity: 0.65;
+/* Brand-filled card only (data-theme="dark"): a hairline top-edge highlight so
+ * the panel reads as lit glass rather than flat fill. Neutral white at low
+ * alpha works over any brand hue in both light and dark page modes. */
+.hero-spotlight-card[data-theme="dark"] {
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.16),
+    0 0 0 1px var(--ot-bloom-brand-border),
+    0 18px 50px var(--ot-bloom-brand-faint),
+    0 6px 20px oklch(from var(--ot-canvas) l c h / 0.35);
+}
+
+/* Secondary CTA inside the card: the shared /40 outline is weak on the brand
+ * fill. Scoped here so other hero directions are untouched; :not(:hover) keeps
+ * the utility hover state winning. currentColor follows light/dark text. */
+.hero-spotlight-card a.border:not(:hover) {
+  border-color: oklch(from currentColor l c h / 0.65);
+}
+
+/* The photo itself: a crisp chromatic bloom shadow, no rotation. */
+.hero-spotlight-frame {
+  box-shadow:
+    0 0 0 1px var(--ot-bloom-brand-border),
+    0 20px 55px var(--ot-bloom-brand-faint),
+    0 8px 24px oklch(from var(--ot-accent) l c h / 0.08);
+}
+
+/* Offset frame: a second bordered plate set directly behind the photo (fixed
+ * translate in JSX, not a rotation) so its edge peeks out on two sides — a
+ * layered-plate cue distinct from Overlap's corner-pinned card. */
+.hero-spotlight-frame-offset {
+  background:
+    linear-gradient(var(--ot-bloom-brand-faint), var(--ot-bloom-brand-faint)),
+    var(--ot-surface);
+  border: 1px solid var(--ot-bloom-brand-ring);
 }
 
 /* Editorial Overlap — the headline plate carries the card chromatic depth so it
@@ -3080,6 +3190,18 @@ body {
   box-shadow:
     0 18px 50px var(--ot-bloom-brand-faint),
     0 6px 20px oklch(from var(--ot-canvas) l c h / 0.45);
+}
+
+/* A very gradual top-to-bottom darkening across the plate — neutral shading for
+ * depth, not a brand/token color, so it reads the same on brand/canvas/surface
+ * fills alike. Sits behind the z-10 content wrapper. */
+.hero-overlap-shade {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(to bottom, oklch(0% 0 0 / 0) 0%, oklch(0% 0 0 / 0.22) 100%);
 }
 
 /* Diagonal Split — the text always sits on an OPAQUE color panel; the panel's
@@ -3596,6 +3718,112 @@ body {
     transparent 70%
   );
   pointer-events: none;
+}
+
+/* ── Slider overlays (OT_SliderBlock) ──────────────────────────────────────────
+ * Per-slide tints over a background image/video, shared by every Presentation
+ * Style. `--slider-tint` is set inline per slide from the slide's own
+ * Background Color token (defaults to canvas), so one class covers all five
+ * colors instead of a color × treatment matrix.
+ */
+.slider-overlay-evenTint {
+  background: oklch(from var(--slider-tint, var(--ot-canvas)) l c h / 0.45);
+  pointer-events: none;
+}
+.slider-overlay-leftFade {
+  background: linear-gradient(
+    to right,
+    oklch(from var(--slider-tint, var(--ot-canvas)) l c h / 0.7) 0%,
+    oklch(from var(--slider-tint, var(--ot-canvas)) l c h / 0.2) 45%,
+    transparent 100%
+  );
+  pointer-events: none;
+}
+.slider-overlay-rightFade {
+  background: linear-gradient(
+    to left,
+    oklch(from var(--slider-tint, var(--ot-canvas)) l c h / 0.7) 0%,
+    oklch(from var(--slider-tint, var(--ot-canvas)) l c h / 0.2) 45%,
+    transparent 100%
+  );
+  pointer-events: none;
+}
+.slider-overlay-bottomFade {
+  background: linear-gradient(
+    to top,
+    oklch(from var(--slider-tint, var(--ot-canvas)) l c h / 0.75) 0%,
+    oklch(from var(--slider-tint, var(--ot-canvas)) l c h / 0.25) 40%,
+    transparent 100%
+  );
+  pointer-events: none;
+}
+.slider-overlay-brandWash {
+  background: linear-gradient(
+    135deg,
+    oklch(from var(--ot-brand) l c h / 0.6) 0%,
+    oklch(from var(--ot-brand) l c h / 0.18) 55%,
+    transparent 100%
+  );
+  pointer-events: none;
+}
+
+/* Editorial Split's media panel when a slide has no Background Image/Video
+   (requirements §5.2): a deeper shade of the slide's own Background Color, so
+   the panel still reads as intentional rather than a blank gap. `--slider-tint`
+   is set inline the same way `.slider-overlay-*` reads it above. */
+.slider-media-fallback {
+  background: oklch(from var(--slider-tint, var(--ot-canvas)) calc(l * 0.7) c h);
+}
+
+/* Legibility safety net for slide text over a photo/video background: a soft
+   dark halo plus a tighter contact shadow, so text stays readable even when
+   the editor's chosen Overlay is "None" or doesn't fully cover the text's
+   corner of the frame. Uses relative-color syntax reading from a token
+   (zeroing l/c/h) rather than a literal black, per the token-derived-color rule. */
+.slider-text-shadow {
+  text-shadow:
+    0 2px 20px oklch(from var(--ot-canvas) 0 0 0 / 0.55),
+    0 1px 4px oklch(from var(--ot-canvas) 0 0 0 / 0.65);
+}
+
+/* Cinematic pagination dot, in Auto-Play-on mode: fills left-to-right over the
+   slide's dwell time. Reuses the tab-progress width keyframe (generic 0%→100%). */
+.slider-dot-progress {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  animation: tab-progress var(--slider-dot-dur, 5s) linear forwards;
+  animation-play-state: var(--slider-dot-play, running);
+  pointer-events: none;
+}
+
+/* Emerge's bottom-up reveal: `--reveal` (0%→100%, animated by Framer Motion on
+   the element itself) is how much of the layer, measured up from the bottom,
+   is opaque. The feather band is calc()'d off that same variable, so it rides
+   the moving boundary automatically — no second element to keep in sync. */
+.emerge-reveal-mask {
+  --ot-emerge-feather: 28px;
+  mask-image: linear-gradient(
+    to top,
+    #000 0%, #000 var(--reveal, 0%),
+    transparent calc(var(--reveal, 0%) + var(--ot-emerge-feather)), transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to top,
+    #000 0%, #000 var(--reveal, 0%),
+    transparent calc(var(--reveal, 0%) + var(--ot-emerge-feather)), transparent 100%
+  );
+}
+
+/* Emerge dock card eyebrow: signal green reads fine on the dark-mode surface
+   panel, but at 82% lightness it's low-contrast against the light-mode
+   surface panel — swap to brand (dark-mode-constant, so still legible)
+   there. Same idiom as `.logo-invert-dark` above: one light-mode override. */
+.emerge-card-eyebrow {
+  color: var(--ot-accent);
+}
+[data-theme="light"] .emerge-card-eyebrow {
+  color: var(--ot-brand);
 }
 
 /* ── No-image glass backdrops ─────────────────────────────────────────────────
