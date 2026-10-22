@@ -190,10 +190,24 @@ async function PreviewPage({ searchParams }: Props) {
 
   if (lastErr || !content) {
     const msg = lastErr instanceof Error ? lastErr.message : 'Unknown error'
+    // GraphContentResponseError carries the individual GraphQL errors; the
+    // summary message ("N errors in the GraphQL query") hides them.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const gqlErrors = (lastErr as any)?.errors
+    if (Array.isArray(gqlErrors)) {
+      console.error('[preview] GraphQL errors:', JSON.stringify(gqlErrors, null, 2))
+    }
     return (
       <div style={{ padding: '2rem', fontFamily: 'monospace' }}>
         <p><strong>Preview unavailable</strong></p>
         <p>{msg}</p>
+        {Array.isArray(gqlErrors) && gqlErrors.length > 0 && (
+          <ul style={{ fontSize: '0.8rem', lineHeight: 1.5 }}>
+            {gqlErrors.map((e: { message?: string }, i: number) => (
+              <li key={i}>{e?.message ?? JSON.stringify(e)}</li>
+            ))}
+          </ul>
+        )}
         <p>The content may not be published or the preview session may have expired. Reload the Visual Builder to get a fresh preview token.</p>
       </div>
     )
