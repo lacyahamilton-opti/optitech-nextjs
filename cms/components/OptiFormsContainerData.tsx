@@ -1,7 +1,7 @@
 import { getPreviewUtils, OptimizelyGridSection } from '@optimizely/cms-sdk/react/server'
 import FormWrapper from '@/components/forms/FormWrapper'
 import type { FormDependencyRule } from '@/components/forms/FormRulesContext'
-import { getClient } from '@/lib/optimizely'
+import { getClient, getRequestLocale } from '@/lib/optimizely'
 
 // Forms placed inline on a VB page arrive in the page's composition as
 // section → step → row → column → OptiForms*Element (verified live on
@@ -14,6 +14,8 @@ import { getClient } from '@/lib/optimizely'
 // entirely — re-test that placement if a form ever goes missing outright.
 
 type Props = {
+  /** Language to load the form in. Defaults to the request locale (not set on /preview). */
+  locale?: string
   content: any
   displaySettings?: Record<string, string | boolean>
 }
@@ -93,7 +95,11 @@ const DEPENDENCY_RULES_FRAGMENT = `
   }
 `
 
-async function fetchFormData(contentKey: string): Promise<{
+// The form is looked up by key in the visitor's language, falling back to the
+// default language when that language has no published version. Without the
+// locale filter Graph returns whichever language comes back first (English), so a
+// French page would show the English form even when a French one is published.
+async function fetchFormData(contentKey: string, locale: string): Promise<{
   title: string | undefined
   description: string | undefined
   submitUrl: string | undefined
@@ -101,42 +107,47 @@ async function fetchFormData(contentKey: string): Promise<{
   rules: FormDependencyRule[]
   topLevelNodes: any[]
 } | null> {
-  try {
-    const data = await getClient().request(
-      `query GetFormData($key: String!) {
-        OptiFormsContainerData(where: { _metadata: { key: { eq: $key } } }, limit: 1) {
-          items {
-            Title
-            Description
-            SubmitUrl { default }
-            SubmitConfirmationMessage
-            ${DEPENDENCY_RULES_FRAGMENT}
-            composition {
-              nodes { ${nodesQuery(3)} }
-            }
-          }
+  const query = (withLocale: boolean) => `query GetFormData($key: String!${withLocale ? ', $locale: String' : ''}) {
+    OptiFormsContainerData(where: { _metadata: { key: { eq: $key }${withLocale ? ', locale: { eq: $locale }' : ''} } }, limit: 1) {
+      items {
+        Title
+        Description
+        SubmitUrl { default }
+        SubmitConfirmationMessage
+        ${DEPENDENCY_RULES_FRAGMENT}
+        composition {
+          nodes { ${nodesQuery(3)} }
         }
-      }`,
-      { key: contentKey },
-    )
-
-    const item = (data as any)?.OptiFormsContainerData?.items?.[0]
-    if (!item) return null
-
-    return {
-      title:               item.Title ?? undefined,
-      description:         item.Description ?? undefined,
-      submitUrl:           item.SubmitUrl?.default ?? undefined,
-      confirmationMessage: item.SubmitConfirmationMessage ?? undefined,
-      rules:               item.DependencyRules ?? [],
-      topLevelNodes:       item.composition?.nodes ?? [],
+      }
     }
-  } catch {
-    return null
+  }`
+
+  const attempts: Array<{ q: string; vars: Record<string, string> }> = [
+    { q: query(true), vars: { key: contentKey, locale } },
+  ]
+  // Default language is also the fallback when the visitor's language has no
+  // published version of the form.
+  if (locale !== 'en') attempts.push({ q: query(true), vars: { key: contentKey, locale: 'en' } })
+
+  for (const { q, vars } of attempts) {
+    try {
+      const data = await getClient().request(q, vars)
+      const item = (data as any)?.OptiFormsContainerData?.items?.[0]
+      if (!item) continue
+      return {
+        title:               item.Title ?? undefined,
+        description:         item.Description ?? undefined,
+        submitUrl:           item.SubmitUrl?.default ?? undefined,
+        confirmationMessage: item.SubmitConfirmationMessage ?? undefined,
+        rules:               item.DependencyRules ?? [],
+        topLevelNodes:       item.composition?.nodes ?? [],
+      }
+    } catch { /* try the next language */ }
   }
+  return null
 }
 
-export default async function OptiFormsContainerDataAdapter({ content, displaySettings = {} }: Props) {
+export default async function OptiFormsContainerDataAdapter({ content, displaySettings = {}, locale }: Props) {
   const { pa } = getPreviewUtils(content)
 
   // Confirmed live: a Forms container placed on a page has no author-facing
@@ -172,7 +183,7 @@ export default async function OptiFormsContainerDataAdapter({ content, displaySe
   let topLevelNodes: any[] = []
 
   if (content._metadata?.key) {
-    const fetched = await fetchFormData(content._metadata.key)
+    const fetched = await fetchFormData(content._metadata.key, locale ?? await getRequestLocale())
     if (fetched) {
       title               = title               ?? fetched.title
       description         = description         ?? fetched.description

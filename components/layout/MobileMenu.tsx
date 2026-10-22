@@ -202,9 +202,11 @@ export default function MobileMenu({ navItems, ctaLabel, ctaHref, enabledLocales
             <LocaleSelectorMobile onSelect={close} enabledLocales={enabledLocales} />
           </nav>
 
-          <div className="mt-lg px-md">
-            <Button href={ctaHref} onClick={close}>{ctaLabel}</Button>
-          </div>
+          {ctaLabel && (
+            <div className="mt-lg px-md">
+              <Button href={ctaHref} onClick={close}>{ctaLabel}</Button>
+            </div>
+          )}
         </div>,
         document.body
       )}

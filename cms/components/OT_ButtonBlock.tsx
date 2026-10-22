@@ -3,6 +3,7 @@ import { getPreviewUtils } from '@optimizely/cms-sdk/react/server'
 import { OT_ButtonBlock as OT_ButtonBlockContentType } from '@/cms/content-types/OT_ButtonBlock'
 import { getButtonStyles } from '@/cms/styling/OT_ButtonBlock.styling'
 import ButtonBlock from '@/components/blocks/ButtonBlock'
+import { resolveCmsUrl } from '@/lib/resolveCmsUrl'
 
 type Props = {
   content: ContentProps<typeof OT_ButtonBlockContentType>
@@ -14,7 +15,7 @@ export default function OT_ButtonBlock({ content, displaySettings = {} }: Props)
   const styleOptions = getButtonStyles(content.variant ? { ...displaySettings, variant: content.variant } : displaySettings)
 
   const label = content.label ?? ''
-  const url   = content.url?.default ?? undefined
+  const url   = resolveCmsUrl(content.url)
 
   if (!label) {
     return (

@@ -118,6 +118,7 @@ Every composition must start with:
 ```json
 {
   "nodeType": "component",
+  "displayName": "Campaign Hero",
   "displaySettings": {
     "displayTemplate": "OT_HeroDefault",
     "settings": { "layout": "standard", "color": "brand", "animation": "none" }
@@ -138,6 +139,14 @@ Every composition must start with:
 Using flat `nodeType: "component"` blocks (no sections) is simpler and valid. Section nesting (section → row → column → component) is only needed for multi-column layouts.
 
 **`displaySettings` must NOT include a `key` field** — only `displayTemplate` and `settings`.
+
+**Always give every outline node a friendly `displayName`.** Without one, the Visual Builder outline
+lists the raw content type key (`OT_HeroBlock`, `OT_StatBlock`, ...), which editors read as noise.
+Name each node for what it does on THIS page: "Campaign Hero", "Ship Stats", "Launch FAQ",
+"Booking Banner". Never name it after the content type, and keep names unique and short (2-3 words).
+Applies to every page you create (scripts, MCP `cms_create_content_item`, fixtures), at the top level
+and for nested sections/rows/columns too. When editing an existing page, rename any node that still
+shows an `OT_` key.
 
 ### Display templates reference
 

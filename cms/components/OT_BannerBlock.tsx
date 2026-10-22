@@ -4,6 +4,7 @@ import { OT_BannerBlock as OT_BannerBlockContentType } from '@/cms/content-types
 import { getBannerStyles }        from '@/cms/styling/OT_BannerBlock.styling'
 import BannerBlock                from '@/components/blocks/BannerBlock'
 import { richTextJson } from '@/lib/richTextJson'
+import { resolveCmsUrl } from '@/lib/resolveCmsUrl'
 
 type Props = {
   content:          ContentProps<typeof OT_BannerBlockContentType>
@@ -25,12 +26,12 @@ export default function OT_BannerBlock({ content, displaySettings = {} }: Props)
         bgVideoSrc={src(content.backgroundVideo) ?? undefined}
         primaryCta={
           content.primaryCtaLabel
-            ? { label: content.primaryCtaLabel, href: content.primaryCtaUrl?.default ?? '#' }
+            ? { label: content.primaryCtaLabel, href: resolveCmsUrl(content.primaryCtaUrl) ?? '#' }
             : undefined
         }
         secondaryCta={
           content.secondaryCtaLabel
-            ? { label: content.secondaryCtaLabel, href: content.secondaryCtaUrl?.default ?? '#' }
+            ? { label: content.secondaryCtaLabel, href: resolveCmsUrl(content.secondaryCtaUrl) ?? '#' }
             : undefined
         }
         styleOptions={styleOptions}

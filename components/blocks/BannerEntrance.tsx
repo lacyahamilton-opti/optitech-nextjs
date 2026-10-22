@@ -39,8 +39,13 @@ export default function BannerEntrance({ children, className }: Props) {
     const el = ref.current
     if (!el) return
 
-    // Reduced-motion: keep data-static (set by SSR) — content stays visible.
-    if (prefersReducedMotion) return
+    // Reduced-motion: content stays visible. Restore data-static, since a
+    // first pass (before the media query resolved) may already have removed it.
+    if (prefersReducedMotion) {
+      el.dataset.static = 'true'
+      delete el.dataset.active
+      return
+    }
 
     // Above-fold detection: if the banner top is already in the viewport on
     // initial load, keep data-static so content remains visible without animation.

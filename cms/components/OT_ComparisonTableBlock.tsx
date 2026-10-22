@@ -3,6 +3,7 @@ import { getPreviewUtils }   from '@optimizely/cms-sdk/react/server'
 import { OT_ComparisonTableBlock as OT_ComparisonTableBlockContentType } from '@/cms/content-types/OT_ComparisonTableBlock'
 import ComparisonTableBlock  from '@/components/blocks/ComparisonTableBlock'
 import type { ComparisonColumn, ComparisonRow, ComparisonCell, TableStyle } from '@/components/blocks/ComparisonTableBlock'
+import { resolveCmsUrl } from '@/lib/resolveCmsUrl'
 
 type Props = {
   content:          ContentProps<typeof OT_ComparisonTableBlockContentType>
@@ -16,7 +17,7 @@ function buildColumns(content: any): ComparisonColumn[] {
     subLabel:  col.subLabel   ? String(col.subLabel)          : undefined,
     badgeText: col.badgeText  ? String(col.badgeText)         : undefined,
     ctaLabel:  col.ctaLabel   ? String(col.ctaLabel)          : undefined,
-    ctaHref:   col.ctaUrl?.default ? String(col.ctaUrl.default) : undefined,
+    ctaHref:   resolveCmsUrl(col.ctaUrl),
   }))
 }
 

@@ -5,6 +5,7 @@ import { OT_ImageBlock as OT_ImageBlockContentType } from '@/cms/content-types/O
 import { getImageStyles } from '@/cms/styling/OT_ImageBlock.styling'
 import ImageBlock from '@/components/blocks/ImageBlock'
 import { sanitizeCmsHtml } from '@/lib/sanitizeHtml'
+import { resolveCmsUrl } from '@/lib/resolveCmsUrl'
 
 type Props = {
   content: ContentProps<typeof OT_ImageBlockContentType>
@@ -112,7 +113,7 @@ export default function OT_ImageBlock({ content, displaySettings = {} }: Props) 
       {content.ctaUrl?.default && (
         <div className="mt-sm">
           <a
-            href={content.ctaUrl.default}
+            href={resolveCmsUrl(content.ctaUrl)}
             className={`btn-signal inline-flex items-center gap-sm px-lg py-sm text-label font-semibold uppercase tracking-wide motion-safe:transition-colors motion-safe:duration-200 ease-quick ${onBrand ? 'bg-fg-on-brand text-brand' : 'bg-brand text-fg-on-brand'}`}
           >
             {content.ctaLabel || 'Learn more'}
@@ -182,7 +183,7 @@ export default function OT_ImageBlock({ content, displaySettings = {} }: Props) 
       className={`w-full${bgClass ? ` ${bgClass}` : ''}`}
       data-stagger={staggerAttr}
     >
-      <div className={`grid grid-cols-1 ${gridCols} gap-lg md:gap-xl items-stretch md:min-h-[max(31.25rem,30vw)] mx-auto max-w-360 px-lg py-xl`}>
+      <div data-block="image" className={`grid grid-cols-1 ${gridCols} gap-lg md:gap-xl items-stretch md:min-h-[max(31.25rem,30vw)] mx-auto max-w-360 px-lg py-xl`}>
         <div className={`min-w-0 flex flex-col min-h-125 ${mediaOrder}`}>
           {mediaEl}
         </div>

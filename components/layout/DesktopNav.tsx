@@ -30,12 +30,12 @@ type Props = {
 
 const LINK_VOICE = {
   default: 'text-sm font-medium text-fg-muted hover:text-fg',
-  split:   'text-label font-semibold uppercase tracking-label text-fg-muted hover:text-fg',
+  split:   'text-label font-semibold uppercase tracking-label whitespace-nowrap text-fg-muted hover:text-fg',
 } as const
 
 const GROUP_GAP = {
   default: 'gap-lg',
-  split:   'gap-xl',
+  split:   'gap-md 2xl:gap-xl',
 } as const
 
 function matchHref(pathname: string, href: string) {
@@ -94,7 +94,7 @@ export default function DesktopNav({ navItems, variant = 'default', ariaLabel = 
               href={item.href}
               aria-current={self.exact ? 'page' : undefined}
               className={[
-                'relative group flex items-center px-sm py-xs rounded-ot-control transition-all duration-150 ease-quick',
+                'relative group flex items-center whitespace-nowrap px-sm py-xs rounded-ot-control transition-all duration-150 ease-quick',
                 sectionActive
                   ? 'bg-brand/10 text-fg! font-semibold'
                   : linkVoice,
@@ -125,7 +125,7 @@ export default function DesktopNav({ navItems, variant = 'default', ariaLabel = 
               aria-haspopup="true"
               onClick={() => setOpenIndex(isOpen ? null : i)}
               className={[
-                'relative group flex items-center gap-xs px-sm py-xs rounded-ot-control transition-all duration-150 ease-quick',
+                'relative group flex items-center gap-xs whitespace-nowrap px-sm py-xs rounded-ot-control transition-all duration-150 ease-quick',
                 sectionActive
                   ? 'bg-brand/10 text-fg! font-semibold'
                   : `${linkVoice} ${isOpen ? 'text-fg! font-semibold' : ''}`,

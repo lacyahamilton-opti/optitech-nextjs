@@ -311,7 +311,7 @@ function LocationCard({ result }: { result: SearchResult }) {
 // ─── Doc row ───────────────────────────────────────────────────────────────────
 
 function DocRow({ doc }: { doc: DocResult }) {
-  const ext  = (doc.extension ?? 'pdf').toUpperCase()
+  const ext  = (doc.extension ?? 'file').toUpperCase()
   const size = doc.fileSize ? formatDocFileSize(doc.fileSize) : null
 
   return (

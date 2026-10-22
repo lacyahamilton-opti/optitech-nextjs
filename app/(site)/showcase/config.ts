@@ -49,11 +49,13 @@ export const CATEGORIES: ShowcaseCategory[] = [
 
       // Listings & Feeds
       { label: 'Blog Feed',                slug: 'blog-feed',                group: 'Listings & Feeds' },
+      { label: 'Commerce Flow',            slug: 'commerce-flow',            group: 'Listings & Feeds' },
       { label: 'Content Recommendations',  slug: 'content-recommendations',  group: 'Listings & Feeds' },
       { label: 'Event Listing',            slug: 'event-listing',            group: 'Listings & Feeds' },
       { label: 'Industry News Feed',       slug: 'industry-news-feed',       group: 'Listings & Feeds' },
       { label: 'Location Listing',         slug: 'location-listing',         group: 'Listings & Feeds' },
       { label: 'Practitioner Listing',     slug: 'practitioner-listing',     group: 'Listings & Feeds' },
+      { label: 'Product Listing',          slug: 'product-listing',          group: 'Listings & Feeds' },
       { label: 'Product Recommendations',  slug: 'product-recommendations',  group: 'Listings & Feeds' },
       { label: 'Resource Library',         slug: 'resource-library',         group: 'Listings & Feeds' },
       { label: 'Trust Rail',               slug: 'trust-rail',               group: 'Listings & Feeds' },
@@ -82,6 +84,7 @@ export const CATEGORIES: ShowcaseCategory[] = [
       { label: 'Event',     slug: 'event'     },
       { label: 'Topic Hub', slug: 'topic-hub' },
       { label: 'Folder',    slug: 'folder'    },
+      { label: 'Campaign Landing', slug: 'campaign-landing' },
     ],
   },
   {

@@ -97,14 +97,34 @@ export function buildJsonLd(
         })
         break
 
-      case 'Product':
+      case 'Product': {
+        const p = page.product
         pageNode = {
           '@type': 'Product',
-          name:    page.seoTitle ?? undefined,
-          description: page.pageAnswer ?? page.seoDescription ?? undefined,
+          name:    p?.name ?? page.seoTitle ?? undefined,
+          description: p?.description ?? page.pageAnswer ?? page.seoDescription ?? undefined,
           url: pageUrl,
+          ...(p?.sku ? { sku: p.sku } : {}),
+          ...(p?.images?.length ? { image: p.images } : {}),
+          ...(p?.brand ? { brand: { '@type': 'Brand', name: p.brand } } : {}),
+          ...(p?.reviewCount && p.rating
+            ? { aggregateRating: { '@type': 'AggregateRating', ratingValue: p.rating, reviewCount: p.reviewCount } }
+            : {}),
+          ...(p?.offers?.length
+            ? {
+                offers: p.offers.map((o) => ({
+                  '@type': 'Offer',
+                  sku: o.sku,
+                  price: (o.price / 100).toFixed(2),
+                  priceCurrency: o.currency,
+                  availability: o.inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+                  url: pageUrl,
+                })),
+              }
+            : {}),
         }
         break
+      }
 
       case 'Event':
         pageNode = {

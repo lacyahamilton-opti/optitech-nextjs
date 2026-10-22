@@ -11,7 +11,7 @@
  * once it is ready. If FX is not configured at all (no SDK key) the queue is
  * drained directly into ODP so tracking still works.
  */
-import { getBrowserFxClientSync, initBrowserFxClient } from './browser-client'
+import { getBrowserFxClientSync, initBrowserFxClient, isOdpDirect } from './browser-client'
 
 type EventTags = Record<string, unknown>
 
@@ -36,6 +36,7 @@ function dispatchToFx(client: ReturnType<typeof getBrowserFxClientSync>, evt: Qu
 
 function dispatchToOdpDirect(evt: QueuedEvent): void {
   if (typeof window === 'undefined' || !window.zaius) return
+  if (isOdpDirect(evt.eventKey)) return
   try {
     window.zaius.event(evt.eventKey, evt.eventTags)
   } catch (e) {
@@ -58,6 +59,9 @@ async function startDrain(): Promise<void> {
       dispatchToOdpDirect(evt)
     }
   }
+  // Allow a later drain: with no FX key, or after rotateVisitorId() rebuilds the
+  // client, events queue again and need a fresh pass.
+  drainStarted = false
 }
 
 /**

@@ -164,7 +164,7 @@ export default function PrimaryTextBlock({
       : headline
 
   return (
-    <section className={sectionCva({ color, size })}>
+    <section className={sectionCva({ color, size })} data-block="text">
       <div className={innerCva({ alignment })}>
         <div className={`flex flex-col gap-sm${alignment === 'center' ? ' items-center' : ''}`}>
           {eyebrow && (

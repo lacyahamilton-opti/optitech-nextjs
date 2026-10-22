@@ -158,11 +158,12 @@ The **primary family** drives the entire hierarchy (display → body → label).
 | Primary axis → `--font-primary-a` | Source Serif 4 | Primary alternate — institutional / editorial pole (medical, financial, legal). The one sanctioned serif. |
 | Primary axis → `--font-primary-b` | Sora | Primary alternate — precise / engineered pole (technical brands). |
 | Primary axis → `--font-primary-c` | Bricolage Grotesque | Primary alternate — expressive / character pole. |
+| Primary axis → `--font-primary-f` | Fraunces | Primary alternate — soft, characterful serif (hospitality, wellness, food, boutique editorial). Second sanctioned serif. |
 | `--font-syne` | Syne (variable) | Fixed accent/display only. Section openers, pull quotes. Once per viewport max. Not themeable. |
 | `--font-mono` | Geist Mono | Code samples, technical labels, data readouts. |
 | `--ot-font-signature` | Caveat 400 | Signature only — the QuoteBlock LaserSignature. Never general copy. |
 
-**Component authors:** reference `--ot-font-sans` (or `font-sans`) for the primary family — never a raw `--font-poppins`, which bypasses the theme axis. **Serif is permitted only** as the Source Serif primary selected through the axis; never introduce another serif or hardcode a family.
+**Component authors:** reference `--ot-font-sans` (or `font-sans`) for the primary family — never a raw `--font-poppins`, which bypasses the theme axis. **Serif is permitted only** as the Source Serif or Fraunces primary selected through the axis; never introduce another serif or hardcode a family.
 
 ### Scale and hierarchy
 
@@ -379,7 +380,7 @@ The heading block (`OT_PrimaryTextBlock`) exposes a single **Header effect** sel
 | 3D Depth | `.ot-depth-extrude` | Hard isometric 45° offset shadow stack; `[data-theme=light]` + `.bg-brand-fill` variants |
 | Glitch | `.ot-fx-chromatic` | Chromatic smear: fg face with RGB-split fringe over a vertically stretched accent streak layer + hard ghost pair (pseudo-element copies via `data-text`); sparse motion-safe twitch |
 | Outline | `.ot-depth-outline` | Hollow wire letterforms, brand stroke + `drop-shadow` glow |
-| Neon | `.ot-fx-neon` | Single-tube neon: Tilt Neon monoline face, white-hot core + accent bloom; brand tube on light grounds |
+| Neon | `.ot-fx-neon` | Single-tube neon: Orbitron face, white-hot core + accent bloom; brand tube on light grounds |
 | Highlight | `.ot-fx-highlight` | Accent marker swipe behind the text (inline span, `box-decoration-break: clone`); fg-on-accent text |
 | Glow | `.ot-fx-glow` | Backlit aurora halo (brand + accent bloom `drop-shadow`); tightened on light grounds |
 

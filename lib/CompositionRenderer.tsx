@@ -50,7 +50,7 @@ export function CompositionRenderer({ nodes }: { nodes: any[] }) {
     return (
       <OptimizelyComponent
         key={node.key}
-        content={{ ...node.component, __composition: node, __typename: node.type }}
+        content={{ ...node.component, nodes: node.nodes, __composition: node, __typename: node.type }}
         displaySettings={displaySettings}
       />
     )

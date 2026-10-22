@@ -12,6 +12,10 @@
     "cms:push:dry": "node scripts/cms-push.mjs --dryRun",
     "cms:push:bootstrap": "node scripts/cms-push.mjs --ignore-circular-dependency",
     "cms:pull": "node --env-file=.env.$(git branch --show-current | tr / -) node_modules/@optimizely/cms-cli/bin/run.js config pull",
+    "catalog:push": "node scripts/catalog/push-catalog.mjs",
+    "catalog:push:dry": "node scripts/catalog/push-catalog.mjs --dryRun",
+    "catalog:reset": "node scripts/catalog/push-catalog.mjs --reset",
+    "fx:events": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/fx/print-events.mjs",
     "test": "tsx --test tests/*.test.ts tests/*.test.tsx",
     "check:feeds": "tsx scripts/check-feeds.ts"
   },

@@ -3,6 +3,7 @@ import { getPreviewUtils }       from '@optimizely/cms-sdk/react/server'
 import { OT_TrustRail as OT_TrustRailContentType } from '@/cms/content-types/OT_TrustRail'
 import { getTrustRailStyles }    from '@/cms/styling/OT_TrustRail.styling'
 import TrustRail, { type LogoItem } from '@/components/blocks/TrustRail'
+import { resolveCmsUrl } from '@/lib/resolveCmsUrl'
 
 type Props = {
   content:          ContentProps<typeof OT_TrustRailContentType>
@@ -26,7 +27,7 @@ function buildLogos(content: any): LogoItem[] {
       return {
         imageUrl: String(imageUrl),
         altText:  item.altText  ? String(item.altText)       : undefined,
-        url:      item.url?.default ?? item.url ?? undefined,
+        url:      resolveCmsUrl(item.url),
       }
     })
     .filter((l): l is LogoItem => l !== null)

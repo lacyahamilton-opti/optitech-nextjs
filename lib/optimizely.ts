@@ -3,9 +3,10 @@ import { headers } from 'next/headers'
 import { config, getClient as _getClient } from '@optimizely/cms-sdk'
 import type { GraphVariationInput } from '@optimizely/cms-sdk'
 import { isSupportedLocale, DEFAULT_LOCALE } from '@/lib/i18n/config'
-import { resolveCornerStyle, resolvePrimaryFont, resolveMotionScale, resolveNavbarStyle, NAVBAR_STYLES } from '@/lib/theme-axes'
+import { resolveCornerStyle, resolvePrimaryFont, resolveMotionScale, resolveNavbarStyle, NAVBAR_STYLES, needsBrandTextLift, BRAND_TEXT_DARK_LIFT } from '@/lib/theme-axes'
 import type { Locale } from '@/lib/i18n/config'
 import { getLocale as getNextIntlLocale } from 'next-intl/server'
+import { setRequestHost } from '@/lib/resolveCmsUrl'
 
 // setContext is called per-request to tell the SDK the active locale.
 // Import lazily to avoid pulling in React server-only code at module init.
@@ -70,8 +71,10 @@ export async function getRequestLocale(): Promise<Locale> {
  */
 export async function getRequestDomain(): Promise<string> {
   try {
-    const h = await headers()
-    return h.get('host') ?? ''
+    const h    = await headers()
+    const host = h.get('host') ?? ''
+    setRequestHost(host)
+    return host
   } catch {
     return ''
   }
@@ -110,7 +113,7 @@ const THEME_QUERY = `
         logoInvertDark
         defaultMode
         ctaLabel
-        ctaUrl { default }
+        ctaUrl { default base }
         footerRef { key }
         copyright
         colorBrand
@@ -145,9 +148,9 @@ const THEME_QUERY = `
         contentRecsDeliveryId
         googleAnalyticsId
         primaryNavigation {
-          menuLink { text title target url { default } }
+          menuLink { text title target url { default base } }
           subNavItems {
-            menuLink { text title target url { default } }
+            menuLink { text title target url { default base } }
             description
             icon
           }
@@ -165,7 +168,7 @@ const THEME_QUERY = `
         description { html }
         links {
           label
-          url { default }
+          url { default base }
         }
       }
     }
@@ -500,6 +503,15 @@ export function buildThemeCSS(settings: any): string {
   if (settings.colorAccent)       root.push(`--ot-accent: ${settings.colorAccent}`)
   if (settings.colorAccentHover)  root.push(`--ot-accent-hover: ${settings.colorAccentHover}`)
   if (settings.colorFgOnAccent)   root.push(`--ot-fg-on-accent: ${settings.colorFgOnAccent}`)
+
+  // A deep brand used as text on dark grounds fails AA; lift it for dark mode
+  // only (globals.css `.text-brand` reads --ot-brand-text). Emitted solely for
+  // deep brands, so every other theme's output is unchanged.
+  if (needsBrandTextLift(settings.colorBrand)) {
+    root.push(`--ot-brand-text: ${BRAND_TEXT_DARK_LIFT}`)
+    dark.push(`--ot-brand-text: ${BRAND_TEXT_DARK_LIFT}`)
+    light.push('--ot-brand-text: var(--ot-brand)')
+  }
 
   // Canvas / Surface — dark mode: root + [data-theme="dark"]
   if (settings.colorCanvas)  { root.push(`--ot-canvas: ${settings.colorCanvas}`);   dark.push(`--ot-canvas: ${settings.colorCanvas}`) }

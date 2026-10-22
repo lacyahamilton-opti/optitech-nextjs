@@ -1,24 +1,22 @@
 import type { MetadataRoute } from 'next'
+import { getRequestBaseUrl } from '@/lib/optimizely'
+import { AI_CRAWLERS, INDEXING_ALLOWED } from '@/lib/indexing'
 
-export default function robots(): MetadataRoute.Robots {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? ''
+export default async function robots(): Promise<MetadataRoute.Robots> {
+  // Per request host: one deployment serves several demo domains, and each
+  // must point crawlers at its own sitemap.
+  const siteUrl = await getRequestBaseUrl()
 
   return {
     rules: [
-      // Standard crawlers — full access
+      // Crawling stays open on purpose. Keeping search results clean is done with a
+      // noindex header (see lib/indexing.ts), which a crawler only sees if it may fetch the page.
       { userAgent: '*', allow: '/', disallow: ['/api/', '/opti-admin/'] },
 
-      // AI answer engines — explicitly permitted for GEO discoverability
-      { userAgent: 'GPTBot',           allow: '/' },
-      { userAgent: 'ChatGPT-User',     allow: '/' },
-      { userAgent: 'ClaudeBot',        allow: '/' },
-      { userAgent: 'Claude-Web',       allow: '/' },
-      { userAgent: 'PerplexityBot',    allow: '/' },
-      { userAgent: 'GoogleOther',      allow: '/' },
-      { userAgent: 'Google-Extended',  allow: '/' },
-      { userAgent: 'cohere-ai',        allow: '/' },
-      { userAgent: 'anthropic-ai',     allow: '/' },
+      // AI answer engines and assistants: explicitly permitted for demo analysis
+      ...AI_CRAWLERS.map(userAgent => ({ userAgent, allow: '/' })),
     ],
-    sitemap: siteUrl ? `${siteUrl}/sitemap.xml` : undefined,
+    // Do not hand search engines a sitemap unless indexing is enabled.
+    sitemap: INDEXING_ALLOWED && siteUrl ? `${siteUrl}/sitemap.xml` : undefined,
   }
 }

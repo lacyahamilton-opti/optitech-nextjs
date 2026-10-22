@@ -2,8 +2,9 @@ import Link from 'next/link'
 import { sanitizeCmsHtml } from '@/lib/sanitizeHtml'
 import Image from 'next/image'
 import { cn } from '@/lib/utils'
-import { getSiteSettings, getRequestDomain, getRequestLocale } from '@/lib/optimizely'
+import { getClient, getSiteSettings, getRequestDomain, getRequestLocale } from '@/lib/optimizely'
 import { BrandMark } from '@/components/layout/BrandMark'
+import { resolveCmsUrl } from '@/lib/resolveCmsUrl'
 import {
   getFooterStyles,
   footerSurfaceAttrs,
@@ -13,6 +14,7 @@ import {
 // Normalized, layout-agnostic footer data. Resolved once, then handed to the
 // chosen layout sub-component below.
 type FooterLink = { label: string; href: string }
+type FooterColumn = { title: string; links: FooterLink[] }
 type FooterView = {
   siteName: string
   logoSrc?: string
@@ -21,6 +23,7 @@ type FooterView = {
   logoSizeClass: string
   descriptionHtml: string | null
   links: FooterLink[]
+  columns: FooterColumn[]
   year: number
   background: FooterBackground
   surfaceAttrs: ReturnType<typeof footerSurfaceAttrs>
@@ -299,15 +302,106 @@ function MinimalFooter({ view }: { view: FooterView }) {
   )
 }
 
-export default async function Footer() {
-  const settings = await getSiteSettings(await getRequestDomain(), await getRequestLocale())
+/* ════════════════════════════════════════════════════════════════════════════
+ * Columns — titled link columns for sites with a deep IA (retail: Shop / Help /
+ * About / Legal). Brand statement + logo on the left, columns on the right,
+ * copyright on a hairline-ruled bottom bar. Background tints the whole footer.
+ * ════════════════════════════════════════════════════════════════════════════ */
+function ColumnsFooter({ view }: { view: FooterView }) {
+  const { surfaceAttrs, background, columns, links, descriptionHtml, year, siteName } = view
+  // No columns authored yet → fall back to the flat links as one column.
+  const cols = columns.length ? columns : links.length ? [{ title: '', links }] : []
+
+  return (
+    <footer {...surfaceAttrs} className="relative overflow-hidden isolate bg-canvas">
+      <div aria-hidden className="h-px" style={{ background: topBarBg(background) }} />
+
+      <div className="relative z-10 mx-auto grid max-w-[96rem] grid-cols-1 gap-lg px-md py-lg lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:gap-xl lg:px-lg lg:py-xl">
+        <div className="flex flex-col gap-sm">
+          <FooterLogo view={view} />
+          {descriptionHtml && (
+            <div
+              className={cn(PROSE, 'max-w-[42ch] text-body leading-body text-fg-muted [&_p+p]:mt-[0.5em]')}
+              dangerouslySetInnerHTML={{ __html: sanitizeCmsHtml(descriptionHtml) }}
+            />
+          )}
+        </div>
+
+        {cols.length > 0 && (
+          <nav aria-label="Footer navigation" className="grid grid-cols-2 gap-x-md gap-y-lg sm:grid-cols-3 lg:grid-cols-4">
+            {cols.map((col, i) => (
+              <div key={col.title || i} className="flex flex-col gap-sm">
+                {col.title && (
+                  <h2 className="text-label uppercase tracking-label font-semibold text-fg">{col.title}</h2>
+                )}
+                <ul className="flex flex-col gap-2">
+                  {col.links.map(link => (
+                    <li key={link.label}>
+                      <Link
+                        href={link.href}
+                        className="text-[0.9375rem] text-fg-muted underline-offset-4 hover:text-fg hover:underline transition-colors duration-200 ease-quick"
+                      >
+                        {link.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </nav>
+        )}
+      </div>
+
+      <div className="relative z-10 border-t border-fg/10">
+        <p className="mx-auto max-w-[96rem] px-md py-sm text-label tracking-label uppercase text-fg-muted/70 lg:px-lg">
+          © {year} {siteName}
+        </p>
+      </div>
+    </footer>
+  )
+}
+
+// Link columns are fetched with their OWN query, only for the Columns style.
+// The shared theme query (lib/optimizely.ts THEME_QUERY) is never touched, so a
+// Graph schema lag on this new field can never affect any other site's footer.
+const FOOTER_COLUMNS_QUERY = `
+  query FooterColumns($key: String!, $locale: [Locales]) {
+    OT_FooterBlock(where: { _metadata: { key: { eq: $key } } }, locale: $locale, limit: 1) {
+      items { columns { title linkItems { label url { default base } } } }
+    }
+  }
+`
+
+async function getFooterColumns(key: string | undefined, locale: string): Promise<FooterColumn[]> {
+  if (!key) return []
+  try {
+    const data = await getClient().request(FOOTER_COLUMNS_QUERY, { key, locale: [locale] })
+    const cols = ((data as any)?.OT_FooterBlock?.items?.[0]?.columns ?? []) as any[]
+    return cols
+      .map(c => ({
+        title: (c.title as string) ?? '',
+        links: ((c.linkItems ?? []) as any[])
+          .map(l => ({ label: (l.label as string) ?? '', href: resolveCmsUrl(l.url) ?? '#' }))
+          .filter(l => l.label),
+      }))
+      .filter(c => c.links.length)
+      .slice(0, 5)
+  } catch {
+    return []
+  }
+}
+
+export default async function Footer({ footerBlock }: { footerBlock?: unknown } = {}) {
+  const locale   = await getRequestLocale()
+  const settings = await getSiteSettings(await getRequestDomain(), locale)
 
   const siteName        = (settings?.siteName as string | undefined) ?? 'Site Accelerator'
   const themeLogoSrc    = settings?.logo?.url?.default as string | undefined
   const logoAlt         = settings?.logoAlt ?? siteName
   const themeLogoInvert = settings?.logoInvertDark === true
 
-  const footerRef          = (settings?.footerRef?.item ?? settings?.footerRef) as any | undefined
+  // `footerBlock` lets a standalone page (campaign landing) supply its own footer record.
+  const footerRef          = (footerBlock ?? settings?.footerRef?.item ?? settings?.footerRef) as any | undefined
   const footerLogoOverride = footerRef?.footerLogo?.url?.default as string | undefined
   const footerLogoSrc      = footerLogoOverride ?? themeLogoSrc
   const footerLogoInvert   = footerLogoOverride !== undefined
@@ -333,9 +427,13 @@ export default async function Footer() {
 
   const links: FooterLink[] = Array.isArray(footerRef?.links)
     ? (footerRef.links as any[])
-        .map(l => ({ label: (l.label as string) ?? '', href: (l.url?.default as string) ?? '#' }))
+        .map(l => ({ label: (l.label as string) ?? '', href: resolveCmsUrl(l.url) ?? '#' }))
         .filter(l => l.label)
         .slice(0, 5)
+    : []
+
+  const columns = style === 'columns'
+    ? await getFooterColumns(footerRef?._metadata?.key as string | undefined, locale)
     : []
 
   const view: FooterView = {
@@ -346,6 +444,7 @@ export default async function Footer() {
     logoSizeClass,
     descriptionHtml,
     links,
+    columns,
     year: new Date().getFullYear(),
     background,
     surfaceAttrs,
@@ -354,6 +453,7 @@ export default async function Footer() {
   switch (style) {
     case 'centered': return <CenteredFooter view={view} />
     case 'minimal':  return <MinimalFooter view={view} />
+    case 'columns':  return <ColumnsFooter view={view} />
     default:         return <SpotlightFooter view={view} />
   }
 }

@@ -4,11 +4,12 @@ import { SectionLabel }         from '../../components'
 import EventPage from '@/components/pages/EventPage'
 import TopicHubPage from '@/components/pages/TopicHubPage'
 import BlogPlayground from '../blog-playground'
+import Link from 'next/link'
 
 // ─── Static params ─────────────────────────────────────────────────────────
 
 export function generateStaticParams() {
-  return [{ page: 'blog' }, { page: 'event' }, { page: 'topic-hub' }, { page: 'folder' }]
+  return [{ page: 'blog' }, { page: 'event' }, { page: 'topic-hub' }, { page: 'folder' }, { page: 'campaign-landing' }]
 }
 
 export async function generateMetadata({
@@ -22,6 +23,7 @@ export async function generateMetadata({
     event:      'Event Page',
     'topic-hub': 'Topic Hub Page',
     folder:     'Folder Page',
+    'campaign-landing': 'Campaign Landing Page',
   }
   const label = labels[page]
   if (!label) return {}
@@ -191,6 +193,62 @@ function FolderPageShowcase() {
   )
 }
 
+// ─── Campaign landing page showcase ─────────────────────────────────────────
+
+const CAMPAIGN_LOOKS_INFO = [
+  { key: 'blueprint', name: 'Blueprint', mode: 'Light · Drafting sheet', use: 'Technical products, B2B launches, engineering and industrial',
+    note: 'Fine grid paper, linework frames with crop marks, numbered figure labels, mono annotations and square controls. Calm, precise, built from the site brand.' },
+  { key: 'neon',      name: 'Neon',      mode: 'Dark · Glowing', use: 'Launch parties, events, nightlife, entertainment',
+    note: 'A night brick wall, tube-outlined display type with a flicker, a rounded neon frame around the viewport and every card a lit sign.' },
+  { key: 'comic',     name: 'Comic',     mode: 'Light · Full palette', use: 'Offers, sign-ups, consumer campaigns',
+    note: 'Comic-book style across every block: ink outlines, hard offset shadows, sticker headline, two-color palette from the site brand and accent.' },
+  { key: 'stage',     name: 'Stage',     mode: 'Dark · Restrained', use: 'Product reveals, executive briefings',
+    note: 'Near-black with one hot accent, a pointer-following spotlight on desktop and type that wipes in as you scroll.' },
+] as const
+
+function CampaignLandingShowcase() {
+  return (
+    <section className="px-md pt-xl pb-xl lg:px-lg">
+      <SectionLabel index="Pages · OT_CampaignLandingPage" title="Campaign Landing Page" />
+      <p className="mb-lg max-w-[65ch] text-body leading-body text-fg-muted">
+        A standalone page with no site navigation or footer. A slim campaign strip, a locked conversion form and its own footer wrap the editor&rsquo;s free Visual Builder composition. The identity is a preset: pick a look, optionally override the accent colour, and every block on the page re-skins. Looks are built from the site&rsquo;s own ThemeManager colours, so the same page type feels native in any vertical.
+      </p>
+
+      <ul className="mb-xl grid gap-md md:grid-cols-2" role="list">
+        {CAMPAIGN_LOOKS_INFO.map(l => (
+          <li key={l.key} className="flex flex-col gap-sm border border-fg/15 p-md lg:p-lg">
+            <div className="flex items-baseline justify-between gap-md">
+              <h3 className="text-title font-semibold">{l.name}</h3>
+              <p className="text-label font-semibold uppercase tracking-label text-fg-muted">{l.mode}</p>
+            </div>
+            <p className="text-body leading-body text-fg-muted">{l.note}</p>
+            <p className="text-label uppercase tracking-label text-fg-muted/80">Good for: {l.use}</p>
+            <div className="mt-xs">
+              <Link
+                href={{ pathname: '/campaign-preview', query: { look: l.key } }}
+                className="inline-block rounded-ot-control border border-brand px-lg py-sm text-label font-semibold uppercase tracking-label text-brand transition-colors hover:bg-brand hover:text-fg-on-brand focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-brand"
+              >
+                Open the {l.name} demo
+              </Link>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      <h3 className="mb-sm text-title font-semibold">Editor controls</h3>
+      <dl className="grid max-w-[65ch] gap-sm text-body leading-body text-fg-muted">
+        <div><dt className="inline font-semibold text-fg">Campaign Look. </dt><dd className="inline">One select. Each look fixes its own mode, so there is no separate light or dark field.</dd></div>
+        <div><dt className="inline font-semibold text-fg">Accent Colour Override. </dt><dd className="inline">Optional hex. Replaces the site accent as the seed; text stays readable whatever is entered.</dd></div>
+        <div><dt className="inline font-semibold text-fg">Motion. </dt><dd className="inline">Full, Calm or Still. Visitors who ask for reduced motion always get Still.</dd></div>
+        <div><dt className="inline font-semibold text-fg">Strip, form and footer. </dt><dd className="inline">Call to action label and URL, a locked form section, and an optional campaign footer.</dd></div>
+      </dl>
+      <p className="mt-lg max-w-[65ch] text-label text-fg-muted">
+        Try a different seed on any demo with <code className="font-mono text-fg">?accent=%23e4572e</code>, and slow the ambient motion with <code className="font-mono text-fg">&amp;motion=calm</code>.
+      </p>
+    </section>
+  )
+}
+
 // ─── Page component ─────────────────────────────────────────────────────────
 
 type Props = { params: Promise<{ page: string }> }
@@ -213,6 +271,7 @@ export default async function ShowcasePageTypePage({ params }: Props) {
     case 'event':      return <EventPageShowcase />
     case 'topic-hub':  return <TopicHubShowcase />
     case 'folder':     return <FolderPageShowcase />
+    case 'campaign-landing': return <CampaignLandingShowcase />
     default:           return notFound()
   }
 }

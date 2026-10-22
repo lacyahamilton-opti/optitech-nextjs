@@ -36,6 +36,18 @@ export type PageSeoFields = {
     description?: string
     worksFor?:    string
   } | null
+  /** Populated for catalog product pages (schemaType 'Product') — drives
+   *  Product JSON-LD with offers, from the Graph catalog record. */
+  product?: {
+    name:          string
+    description?:  string
+    sku?:          string
+    brand?:        string
+    images?:       string[]
+    rating?:       number
+    reviewCount?:  number
+    offers?: Array<{ sku: string; price: number; currency: string; inStock: boolean }>
+  } | null
 }
 
 /**
@@ -94,7 +106,7 @@ export function buildPageMetadata(
 
   const description = page.seoDescription ?? site.defaultSeoDescription ?? undefined
 
-  const siteUrl   = process.env.NEXT_PUBLIC_SITE_URL ?? ''
+  const siteUrl   = (process.env.NEXT_PUBLIC_SITE_URL ?? '').replace(/\/$/, '')
   const canonical = page.canonicalUrl?.default ?? `${siteUrl}${pagePath}`
 
   const imageUrl =

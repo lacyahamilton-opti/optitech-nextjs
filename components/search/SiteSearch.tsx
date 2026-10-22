@@ -6,23 +6,26 @@ import { createPortal } from 'react-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {
   Search, X, Maximize2, Minimize2, Check, ChevronDown,
-  FileText, Newspaper, LayoutGrid, Sparkles, List, Layers, Tag,
-  CalendarDays, MapPin, Video, ExternalLink, Code2,
+  FileText, Newspaper, LayoutGrid, Sparkles, Hash, List, SlidersHorizontal, Layers, Tag,
+  CalendarDays, MapPin, Video, ExternalLink, Code2, ShoppingBag,
 } from 'lucide-react'
 import { useSearch } from './SearchProvider'
 import { useTranslation } from '@/lib/i18n/useTranslation'
+import { useCommerce } from '@/components/commerce/CommerceProvider'
+import { trackSearch } from '@/lib/commerce/track'
 import type { SearchResult, AutocompleteSuggestion, AutocompleteType } from '@/lib/search'
 import { formatEventDate, eventTypeLabel } from '@/lib/eventFormat'
 import { FilterTriggerButton, FilterDrawer, FilterRadioGroup, FilterPillGroup } from '@/components/ui/FilterDrawer'
 
 type DisplayMode = 'immersive' | 'compact'
-type TypeFilter  = 'all' | 'Blog' | 'Page' | 'Event'
+type TypeFilter  = 'all' | 'Product' | 'Blog' | 'Page' | 'Event'
 type ViewMode    = 'list' | 'card'
 
 const DISPLAY_MODE_KEY = 'ot-search-mode'
 
 const TYPE_FILTERS: { value: TypeFilter; label: string; Icon: typeof LayoutGrid }[] = [
   { value: 'all',   label: 'All',    Icon: LayoutGrid   },
+  { value: 'Product', label: 'Products', Icon: ShoppingBag },
   { value: 'Blog',  label: 'Blog',   Icon: Newspaper    },
   { value: 'Page',  label: 'Page',   Icon: FileText     },
   { value: 'Event', label: 'Events', Icon: CalendarDays },
@@ -30,11 +33,12 @@ const TYPE_FILTERS: { value: TypeFilter; label: string; Icon: typeof LayoutGrid 
 
 // Suggestion group order + icon/label, reusing the same vocabulary as
 // TYPE_FILTERS above so the typeahead groups read identically to the filter drawer.
-const SUGGESTION_GROUP_ORDER: AutocompleteType[] = ['Blog', 'Event', 'Page']
+const SUGGESTION_GROUP_ORDER: AutocompleteType[] = ['Product', 'Blog', 'Event', 'Page']
 const SUGGESTION_GROUP_META: Record<AutocompleteType, { label: string; Icon: typeof LayoutGrid }> = {
-  Blog:  { label: 'Blog',   Icon: Newspaper    },
-  Event: { label: 'Events', Icon: CalendarDays },
-  Page:  { label: 'Pages',  Icon: FileText     },
+  Product: { label: 'Products', Icon: ShoppingBag  },
+  Blog:    { label: 'Blog',     Icon: Newspaper    },
+  Event:   { label: 'Events',   Icon: CalendarDays },
+  Page:    { label: 'Pages',    Icon: FileText     },
 }
 
 function groupSuggestions(items: AutocompleteSuggestion[]) {
@@ -86,7 +90,11 @@ export default function SiteSearch() {
   const { isOpen, closeSearch } = useSearch()
   const router = useRouter()
   const prefersReducedMotion = useReducedMotion()
-  const { t } = useTranslation()
+  const { t, locale } = useTranslation()
+  // Storefront sites (inside CommerceProvider) also search products and report
+  // search events; every other site keeps its existing behaviour.
+  const { enabled: storefront } = useCommerce()
+  const searchTrackRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const [mode,        setMode]        = useState<DisplayMode>('immersive')
   const [query,       setQuery]       = useState('')
@@ -208,7 +216,7 @@ export default function SiteSearch() {
     setLoading(true)
     setHasSearched(true)
     try {
-      const params = new URLSearchParams({ q: q.trim(), type })
+      const params = new URLSearchParams({ q: q.trim(), type, locale })
       if (useSemanticSearch) params.set('semantic', 'true')
       const fetchUrl = `/api/search?${params}`
       lastSearchUrlRef.current = fetchUrl
@@ -216,12 +224,17 @@ export default function SiteSearch() {
       const data: SearchResult[] = await res.json()
       setResults(data)
       setFocusedIdx(-1)
+      if (storefront && type === 'all') {
+        // Report the query once the shopper pauses, not on every keystroke.
+        clearTimeout(searchTrackRef.current)
+        searchTrackRef.current = setTimeout(() => trackSearch(q, data.length), 1200)
+      }
     } catch {
       setResults([])
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [locale, storefront])
 
   const handleQueryChange = (value: string) => {
     setQuery(value)
@@ -232,7 +245,7 @@ export default function SiteSearch() {
     if (value.trim().length >= 2) {
       suggestDebounceRef.current = setTimeout(async () => {
         try {
-          const res = await fetch(`/api/search/autocomplete?q=${encodeURIComponent(value.trim())}`)
+          const res = await fetch(`/api/search/autocomplete?q=${encodeURIComponent(value.trim())}&locale=${locale}`)
           const data: AutocompleteSuggestion[] = await res.json()
           setSuggestions(data)
           setShowSuggestions(data.length > 0)
@@ -365,6 +378,7 @@ export default function SiteSearch() {
     }
   }
 
+  const productCount = results.filter(r => r.type === 'Product').length
   const blogCount  = results.filter(r => r.type === 'Blog').length
   const pageCount  = results.filter(r => r.type === 'Page').length
   const eventCount = results.filter(r => r.type === 'Event').length
@@ -401,9 +415,10 @@ export default function SiteSearch() {
   const activeFilterCount = (typeFilter !== 'all' ? 1 : 0) + (topicFilter ? 1 : 0)
 
   function countFor(f: TypeFilter) {
-    if (f === 'all')   return allCount
-    if (f === 'Blog')  return blogCount
-    if (f === 'Event') return eventCount
+    if (f === 'all')     return allCount
+    if (f === 'Blog')    return blogCount
+    if (f === 'Product') return productCount
+    if (f === 'Event')   return eventCount
     return pageCount
   }
 
@@ -423,7 +438,7 @@ export default function SiteSearch() {
           ariaLabel={t('search.contentTypeFilter')}
           value={typeFilter}
           onSelect={handleTypeFilter}
-          options={TYPE_FILTERS.map(f => ({
+          options={TYPE_FILTERS.filter(f => storefront || f.value !== 'Product').map(f => ({
             value: f.value,
             label: f.label,
             count: hasSearched ? countFor(f.value) : undefined,
@@ -767,6 +782,8 @@ export default function SiteSearch() {
               />
             ) : isEvent ? (
               <CalendarDays size={isCompact ? 15 : 18} className="text-accent/40" />
+            ) : result.type === 'Product' ? (
+              <ShoppingBag size={isCompact ? 15 : 18} className="text-fg-muted/25" />
             ) : result.type === 'Blog' ? (
               <Newspaper size={isCompact ? 15 : 18} className="text-fg-muted/25" />
             ) : (
@@ -823,6 +840,10 @@ export default function SiteSearch() {
             ].join(' ')}>
               {result.title}
             </p>
+
+            {result.price && (
+              <p className={`mt-[2px] tabular-nums font-medium text-fg ${isCompact ? 'text-[12px]' : 'text-[14px]'}`}>{result.price}</p>
+            )}
 
             {isEvent && result.locationLabel && (
               <p className={`mt-[4px] inline-flex items-center gap-[5px] font-medium text-fg-muted ${isCompact ? 'text-[12px]' : 'text-[13px]'}`}>
@@ -893,6 +914,8 @@ export default function SiteSearch() {
               <div className="w-full h-full flex items-center justify-center">
                 {isEvent
                   ? <CalendarDays size={28} className="text-accent/25" />
+                  : result.type === 'Product'
+                    ? <ShoppingBag size={28} className="text-fg-muted/18" />
                   : result.type === 'Blog'
                     ? <Newspaper size={28} className="text-fg-muted/18" />
                     : <FileText  size={28} className="text-fg-muted/18" />}
@@ -938,6 +961,7 @@ export default function SiteSearch() {
             ].join(' ')}>
               {result.title}
             </p>
+            {result.price && <p className="mt-[4px] text-[14px] tabular-nums font-medium text-fg">{result.price}</p>}
             {/* Event date + location carry as much weight as the title */}
             {isEvent && (date || result.locationLabel) && (
               <div className="mt-sm flex flex-col gap-[3px]">

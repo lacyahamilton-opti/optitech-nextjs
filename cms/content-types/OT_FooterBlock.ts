@@ -1,4 +1,5 @@
 import { contentType } from '@optimizely/cms-sdk'
+import { OT_FooterColumn } from './OT_FooterColumn'
 import { OT_FooterLink } from './OT_FooterLink'
 
 /**
@@ -37,6 +38,7 @@ export const OT_FooterBlock = contentType({
         { value: 'spotlight', displayName: 'Spotlight — bold, branded (default)' },
         { value: 'centered',  displayName: 'Centered — calm, symmetrical' },
         { value: 'minimal',   displayName: 'Minimal — compact single row' },
+        { value: 'columns',   displayName: 'Columns — titled link columns (retail / large sites)' },
       ],
     },
     // ── Logo override ─────────────────────────────────────────────────────────
@@ -108,6 +110,15 @@ export const OT_FooterBlock = contentType({
       sortOrder: 20,
       maxItems: 10,
       items: { type: 'component', contentType: OT_FooterLink },
+    },
+    columns: {
+      type: 'array',
+      displayName: 'Link Columns',
+      description: 'Used by the Columns footer style: up to 5 titled columns of links (e.g. Shop, Help, About, Legal). Other styles ignore it and use Footer Links.',
+      group: 'OT_Content',
+      sortOrder: 30,
+      maxItems: 5,
+      items: { type: 'component', contentType: OT_FooterColumn },
     },
   },
 })

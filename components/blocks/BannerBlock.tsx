@@ -332,6 +332,7 @@ export default function BannerBlock({
     <section
       className={sectionCva({ size })}
       data-theme={forcedTheme}
+      data-block="cta"
     >
 
       {/* ── Background layer (z-0, absolute inset) ─────────────────────── */}

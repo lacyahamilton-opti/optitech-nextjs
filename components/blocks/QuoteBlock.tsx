@@ -140,7 +140,7 @@ export default function QuoteBlock({
     : "clamp(5rem, 10vw, 7.5rem)";
 
   return (
-    <section className={sectionCva({ color, size })}>
+    <section className={sectionCva({ color, size })} data-block="quote">
       <div className={containerCva({ alignment })}>
         <figure className={cn(
           "relative",
@@ -226,7 +226,7 @@ function BubbleQuote({ quote, attribution, color, size, alignment, pa }: Treatme
     : "text-[clamp(1.2rem,2.5vw,1.75rem)]";
 
   return (
-    <section className={sectionCva({ color, size })}>
+    <section className={sectionCva({ color, size })} data-block="quote">
       <div className={cn("w-full max-w-3xl", alignment === "center" ? "mx-auto" : "mr-auto")}>
         <figure>
           {/* Outer wrapper: carries the shadow class (sets --bq-tail-color + box-shadow)
@@ -313,7 +313,7 @@ function GlowQuote({ quote, attribution, color, size, alignment, pa }: Treatment
   const cardBg       = sectionColor === "surface" ? "bg-canvas" : "bg-surface";
 
   return (
-    <section className={sectionCva({ color: sectionColor, size })}>
+    <section className={sectionCva({ color: sectionColor, size })} data-block="quote">
       <div className={cn("w-full max-w-4xl", alignment === "center" ? "mx-auto" : "mr-auto")}>
         <figure>
           <div className="relative motion-safe:animate-slide-up">

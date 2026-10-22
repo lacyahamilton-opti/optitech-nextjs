@@ -60,6 +60,11 @@ import ButtonPlayground       from '../button-playground'
 import TrustRailPlayground    from '../trust-rail-playground'
 import TokenManagerPlayground from '../token-manager-playground'
 import SliderPlayground       from '../slider-playground'
+import ProductListingBlock    from '@/components/blocks/ProductListingBlock'
+import CommerceFlowBlock      from '@/components/blocks/CommerceFlowBlock'
+import CatalogRecommendations from '@/components/blocks/CatalogRecommendations'
+import CommerceProvider       from '@/components/commerce/CommerceProvider'
+import { fixtureBag, fixtureCards, fixtureSubCategories } from '@/lib/commerce/fixtures'
 import OT_IndustryNewsFeedBlock  from '@/cms/components/OT_IndustryNewsFeedBlock'
 import { enabledFeeds }          from '@/lib/feeds/registry'
 
@@ -70,7 +75,7 @@ const BLOCK_SLUGS = [
   'image', 'video', 'stat', 'stat-item', 'feature-grid', 'feature-item', 'trust-rail',
   'accordion', 'tabs', 'tab-item', 'blog-feed', 'button', 'chart', 'banner', 'resource-library',
   'callout', 'divider', 'event-listing', 'practitioner-listing', 'location-listing',
-  'content-recommendations', 'product-recommendations',
+  'content-recommendations', 'product-recommendations', 'product-listing', 'commerce-flow',
   'comparison-table',
   'disclosure',
   'token-manager',
@@ -107,7 +112,9 @@ const BLOCK_META: Record<BlockSlug, { label: string; cmsKey: string; description
   'practitioner-listing': { label: 'PractitionerListingBlock', cmsKey: 'OT_PractitionerListingBlock', description: 'CMS-driven, vertical-agnostic people directory pulled from Practitioner Profiles. Grid (cards) or list (rows) layout, client-side search across name / credentials / specialty, and three multi-select filters — specialty, location, and language — derived dynamically from the loaded set, never a fixed list. Values OR within a filter and AND across filters. Automatically scoped to the current site via the Site Key field on each profile. Squared portraits with a chromatic brand bloom and a designed initials fallback. In production, practitioners are fetched at render time; the showcase uses static fixtures spanning medical, legal, and technology verticals.' },
   'location-listing': { label: 'LocationListingBlock', cmsKey: 'OT_LocationListingBlock', description: 'CMS-driven, vertical-agnostic location directory pulled from Location Profiles. Three toggleable views: a Mapbox dark map paired with a synchronized scrollable location rail (click a marker or rail card to fly + open its popup), an image-plate card grid, and a compact list. Client-side search across name / label / address, and a single-select label filter derived dynamically from the loaded set — never a fixed list, "All" always first. Automatically scoped to the current site via the Site Key field on each profile. Custom brand-beacon markers and fully-restyled dark-glass popups. In production, addresses are geocoded via the Mapbox API at render time (24h ISR cache); the showcase uses static fixtures with pre-resolved coordinates, so it makes no API calls.' },
   'content-recommendations': { label: 'ContentRecommendationsBlock', cmsKey: 'OT_ContentRecommendationsBlock', description: 'Personalized content grid from Optimizely Content Recommendations (Idio). The ia.js tracker builds a per-visitor profile and the block fetches recommendations server-side at render time using the delivery key configured on the ThemeManager. Three color schemes. In production, items are personalized per visitor; the showcase uses static sample articles to demonstrate the layout.' },
-  'product-recommendations': { label: 'ProductRecommendationsBlock', cmsKey: 'OT_ProductRecommendationsBlock', description: 'Live product recommendations from Optimizely Product Recommendations (Peerius). The engine returns recommendations client-side (via the peerius:recs event) for the configured widget position; the widget renders a card grid with a "Show all" expand. When the engine returns nothing it shows an empty state. In production, recs are live and personalized; the showcase uses static sample products.' },
+  'product-recommendations': { label: 'ProductRecommendationsBlock', cmsKey: 'OT_ProductRecommendationsBlock', description: 'Product recommendations from two sources. Peerius (default): live, personalized recommendations from Optimizely Product Recommendations, returned client-side via the peerius:recs event and rendered as a card grid with a "Show all" expand. Catalog: merchandising strategies over the Optimizely Graph product catalog — trending, from a category, hand-picked, complete the look (on product pages), recently viewed and pairs-with-your-bag (next best product) — rendered as a product-card shelf that scrolls on mobile. Session strategies hide the whole shelf when the shopper has no history yet. The showcase uses static sample products.' },
+  'product-listing': { label: 'ProductListingBlock', cmsKey: 'OT_ProductListingBlock', description: 'The storefront product listing (PLP) over the Optimizely Graph product catalog. Scope by category, collection or badge; facets — category, size (in-stock only), colour, material, fit, price band and traits — are derived from the loaded products, OR within a facet and AND across facets, and live in the URL so category links deep-link into a filtered view. Five sorts, progressive Show more, and an optional brand-filled editorial tile slotted into the grid (hidden while filtering). Cards crossfade to a second image on hover and carry a wishlist toggle. The showcase uses the catalog JSON as fixtures.' },
+  'commerce-flow': { label: 'CommerceFlowBlock', cmsKey: 'OT_CommerceFlowBlock', description: 'The mock storefront\'s transactional surfaces behind one block with a mode: bag (editable lines, free-delivery meter, order summary), checkout (details → delivery → payment, inline validation, test card only), order confirmation (read back from the browser) and wishlist. No commerce backend: state lives in the shopper\'s browser, and only the last four digits of the published test card are kept. The summary panel can be surface, brand or ruled. The showcase seeds a sample bag in a sandboxed store.' },
   'comparison-table': { label: 'ComparisonTableBlock', cmsKey: 'OT_ComparisonTableBlock', description: 'Side-by-side comparison of plans, tiers, or account types. Grouped rows divide the table into named sections. Cells support a Lucide icon, short text, or both — an empty cell renders a dash. One column can be marked as featured to receive the brand-color treatment and a badge. On mobile a column-selector tab bar replaces the full grid, with swipe gesture support.' },
   'disclosure':       { label: 'DisclosureBlock',      cmsKey: 'OT_DisclosureBlock',      description: 'Legal and regulatory disclosures, rate notices, and footnotes. Items are auto-numbered (¹ ² ³ or a b c) — single-item blocks suppress the marker. Two styles: Fine Print (ultra-subtle footnote treatment) and Section (slightly elevated zone). Heading and marker style are content-type properties; no display template settings to configure.' },
   'token-manager':    { label: 'TokenManager',          cmsKey: 'OT_TokenManager',          description: 'Global text-token system. Authors define key–value pairs (e.g. product-name → Advantage Checking); any CMS field that contains {{product-name}} receives the value at render time — in the CMS preview and on published pages. Token keys are language-neutral; values can be translated per locale. Singleton shared block, like ThemeManager.' },
@@ -2717,6 +2724,82 @@ const SAMPLE_PRODUCT_RECS: ProductRec[] = [
   { id: 4, title: 'OptiTech Data Pipeline', url: '#', img: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=600&q=80&fit=crop', description: 'Streaming ETL with schema enforcement and one-click connectors.', price: 'From $299/mo' },
 ]
 
+function ProductListingShowcase() {
+  return (
+    <>
+      <BlockHeader slug="product-listing" />
+      <div className="px-md pb-sm lg:px-lg pt-md">
+        <p className="text-label text-fg-muted/60 leading-body max-w-[65ch]">
+          In production, products come from the Optimizely Graph product catalog for the site&rsquo;s catalog ID, scoped by the block&rsquo;s category, collection and badge fields. The showcase reads the same catalog JSON directly. Filter by size or colour and watch the URL update; add a sort and use the back button.
+        </p>
+      </div>
+
+      <VariantGroup label="Women · 4 columns · portrait · facets + editorial tile" note="The full category page experience. Facet options come from the loaded products; the brand tile sits after the fifth product and steps aside once a filter is active." />
+      <div className="border-t border-fg/5">
+        <ProductListingBlock
+          heading="Women"
+          subtext="The season's collection and the pieces it was built around."
+          products={fixtureCards((p) => p.gender === 'women')}
+          subCategories={fixtureSubCategories('women')}
+          currency="USD"
+          pageSize={8}
+          tile={{ eyebrow: 'The knit guide', heading: 'Lambswool, merino or cashmere?', body: 'How each yarn wears, warms and ages — and which one to reach for first.', ctaLabel: 'Read the guide', ctaUrl: '/showcase/blocks/rich-text' }}
+          styleOptions={{ color: 'canvas', columns: 4, cardAspect: 'portrait', showFacets: true, tilePosition: 3 }}
+        />
+      </div>
+
+      <VariantGroup label="Archive · 3 columns · square · surface · no facets" note="A compact curated grid: revised prices show the original as a quiet strikethrough — no red, no percentage off." />
+      <div className="border-t border-fg/5">
+        <ProductListingBlock
+          heading="Archive"
+          subtext="Earlier seasons, fewer sizes, revised prices. We don’t remake past collections."
+          products={fixtureCards((p) => p.collections.includes('archive'))}
+          subCategories={[]}
+          currency="USD"
+          styleOptions={{ color: 'surface', columns: 3, cardAspect: 'square', showFacets: false, tilePosition: 3 }}
+        />
+      </div>
+      <div className="pb-xl" />
+    </>
+  )
+}
+
+function CommerceFlowShowcase() {
+  const bag = fixtureBag()
+  return (
+    <>
+      <BlockHeader slug="commerce-flow" />
+      <div className="px-md pb-sm lg:px-lg pt-md">
+        <p className="text-label text-fg-muted/60 leading-body max-w-[65ch]">
+          Each demo below runs in a sandboxed store seeded with a two-piece bag, so it never touches a real storefront bag. Change quantities, walk the checkout (card 4242 4242 4242 4242, any future expiry, any CVC) and the confirmation reads the order back from the browser.
+        </p>
+      </div>
+
+      <VariantGroup label="mode: bag · surface summary" />
+      <div className="border-t border-fg/5">
+        <CommerceProvider catalogId="showcase-bag" currency="USD" locale="en" seed={{ bag }}>
+          <CommerceFlowBlock mode="bag" assurance="Free returns within 30 days. Free repairs for life for members." summaryStyle="surface" />
+        </CommerceProvider>
+      </div>
+
+      <VariantGroup label="mode: checkout · brand summary" note="Three steps with inline validation. Payment accepts only the published test card." />
+      <div className="border-t border-fg/5">
+        <CommerceProvider catalogId="showcase-checkout" currency="USD" locale="en" seed={{ bag }}>
+          <CommerceFlowBlock mode="checkout" summaryStyle="brand" continueUrl="/showcase/blocks/commerce-flow" />
+        </CommerceProvider>
+      </div>
+
+      <VariantGroup label="mode: wishlist · empty state" />
+      <div className="border-t border-fg/5">
+        <CommerceProvider catalogId="showcase-wishlist" currency="USD" locale="en">
+          <CommerceFlowBlock mode="wishlist" emptyMessage="Nothing saved yet" continueUrl="/showcase/blocks/product-listing" />
+        </CommerceProvider>
+      </div>
+      <div className="pb-xl" />
+    </>
+  )
+}
+
 function ProductRecommendationsShowcase() {
   return (
     <>
@@ -2746,6 +2829,17 @@ function ProductRecommendationsShowcase() {
       <VariantGroup label="Show-all expand · initialCount 3 of 4" note="When the engine returns more than the initial count, a Show-all control reveals the rest." />
       <div className="border-t border-fg/5">
         <ProductRecommendationsBlock initialCount={3} showAllLabel="Show all 4" color="canvas" initialRecs={SAMPLE_PRODUCT_RECS} />
+      </div>
+
+      <VariantGroup label="source: catalog · strategy: completeTheLook · surface" note="Catalog source over the Graph product catalog. On a product page, Complete the look reads the current product and shows its curated pairings first, then same-category pieces. The shelf scrolls horizontally on mobile." />
+      <div className="border-t border-fg/5">
+        <CatalogRecommendations
+          heading="Complete the look"
+          subheading="Pieces cut to wear with the Loden Wool Car Coat."
+          color="surface"
+          count={4}
+          initial={fixtureCards((p) => ['cashmere-boxy-cardigan', 'wide-leg-wool-trouser', 'oversized-lambswool-scarf', 'suede-chelsea-boot'].includes(p.handle))}
+        />
       </div>
       <div className="pb-xl" />
     </>
@@ -2941,6 +3035,8 @@ export default async function ShowcaseBlockPage({ params }: Props) {
     case 'location-listing':     return <LocationListingShowcase />
     case 'content-recommendations': return <ContentRecommendationsShowcase />
     case 'product-recommendations': return <ProductRecommendationsShowcase />
+    case 'product-listing': return <ProductListingShowcase />
+    case 'commerce-flow': return <CommerceFlowShowcase />
     case 'comparison-table':        return <ComparisonTableShowcase />
     case 'disclosure':              return <><BlockHeader slug="disclosure" /><DisclosurePlayground /></>
     case 'token-manager':           return <><BlockHeader slug="token-manager" /><TokenManagerPlayground /></>

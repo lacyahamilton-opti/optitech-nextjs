@@ -10,9 +10,12 @@
 import { cookies, headers } from 'next/headers'
 import type { OptimizelySegmentOption } from '@optimizely/optimizely-sdk'
 import { getOptimizelyClient } from './client'
+import { ACQ_COOKIE, parseAcquisition } from '@/lib/acquisition'
 import type { VariantDecision, ContentVariantDecision } from './types'
 
 const USER_ID_COOKIE = 'optimizely_user_id'
+/** Demo persona segment written by the storefront sign-in (lib/commerce/storage.ts). */
+const PERSONA_COOKIE = 'ot_persona'
 
 // SDK enum is exported type-only from the main entry; runtime values are string literals.
 const SEGMENT_FETCH_OPTIONS: OptimizelySegmentOption[] = ['IGNORE_CACHE' as OptimizelySegmentOption]
@@ -33,13 +36,30 @@ async function getUserId(): Promise<string> {
   return crypto.randomUUID()
 }
 
-/** Build FX user attributes from the current request. */
+/**
+ * Build FX user attributes from the current request. FX evaluates audiences
+ * locally against these; nothing is sent for the decision itself.
+ * `loyalty_tier` (new | circle | reserve) is present only while a storefront
+ * demo persona is signed in, so audiences can target it directly; utm_source /
+ * utm_medium / utm_campaign only when a first-touch acquisition was recorded.
+ */
 async function buildAttributes(locale: string): Promise<Record<string, string>> {
   const h = await headers()
-  return {
+  const attrs: Record<string, string> = {
     locale,
     host: h.get('host') ?? '',
   }
+  const jar = await cookies()
+  const tier = jar.get(PERSONA_COOKIE)?.value
+  if (tier && /^[a-z]+$/.test(tier)) attrs.loyalty_tier = tier
+  // First-touch acquisition (proxy.ts) for "arrived from paid social"-style audiences.
+  const acq = parseAcquisition(jar.get(ACQ_COOKIE)?.value)
+  if (acq) {
+    attrs.utm_source = acq.source
+    if (acq.medium) attrs.utm_medium = acq.medium
+    if (acq.campaign) attrs.utm_campaign = acq.campaign
+  }
+  return attrs
 }
 
 /** Fetch ODP qualified segments through the SDK's normal path (keyed by fs_user_id). */

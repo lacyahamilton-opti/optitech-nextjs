@@ -3,6 +3,7 @@ import { getPreviewUtils }   from '@optimizely/cms-sdk/react/server'
 import { OT_CalloutBlock as OT_CalloutBlockContentType } from '@/cms/content-types/OT_CalloutBlock'
 import { getCalloutStyles }  from '@/cms/styling/OT_CalloutBlock.styling'
 import CalloutBlock          from '@/components/blocks/CalloutBlock'
+import { resolveCmsUrl } from '@/lib/resolveCmsUrl'
 
 type Props = {
   content:          ContentProps<typeof OT_CalloutBlockContentType>
@@ -15,7 +16,7 @@ export default function OT_CalloutBlockAdapter({ content, displaySettings = {} }
   const entranceAnimation = String(displaySettings?.entranceAnimation ?? 'none')
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const ctaUrl = (content.ctaUrl as any)?.default ?? content.ctaUrl ?? undefined
+  const ctaUrl = resolveCmsUrl(content.ctaUrl as any)
 
   return (
     <div

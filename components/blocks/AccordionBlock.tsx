@@ -161,8 +161,18 @@ const iconCva = cva(
 // Standard Radix height animation: overflow-hidden clips the content while height
 // animates 0 ↔ --radix-accordion-content-height. motion-safe: gates it for
 // reduced-motion (which then opens/closes instantly).
+//
+// forceMount keeps every answer in the server-rendered HTML (Radix otherwise
+// unmounts closed content, so crawlers see empty containers). Closed items are
+// held at height 0 and flipped to `invisible` only AFTER the close animation
+// (visibility transition delayed by the same duration), so they stay out of the
+// a11y tree and tab order without cutting the exit animation short. Opening
+// removes both rules in the same commit Radix measures in, so the open height
+// is still the natural one.
 const contentClasses = [
   'overflow-hidden',
+  'data-[state=closed]:h-0 data-[state=closed]:invisible',
+  '[transition:visibility_0s_linear_var(--ot-dur-accordion)] data-[state=open]:[transition-delay:0s]',
   'motion-safe:data-[state=open]:animate-accordion-down',
   'motion-safe:data-[state=closed]:animate-accordion-up',
 ].join(' ')
@@ -229,6 +239,7 @@ export default function AccordionBlock({
     <section
       className={sectionCva({ color })}
       data-theme={isDarkSurface ? 'dark' : undefined}
+      data-block="accordion"
     >
       <div className="max-w-3xl mx-auto">
 
@@ -320,7 +331,7 @@ function AccordionItemNode({ value, item, color, borderStyle }: ItemNodeProps) {
 
       {/* Radix sets --radix-accordion-content-height on this element; the
           overflow-hidden + height keyframes animate the reveal. */}
-      <RadixAccordion.Content className={contentClasses}>
+      <RadixAccordion.Content forceMount className={contentClasses}>
         <p className={answerCva({ color, borderStyle })}>
           {item.answer}
         </p>

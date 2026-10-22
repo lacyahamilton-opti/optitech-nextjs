@@ -1,5 +1,6 @@
 import type { TabItemData } from '@/components/blocks/TabsBlock'
 import { richTextJson } from '@/lib/richTextJson'
+import { resolveCmsUrl } from '@/lib/resolveCmsUrl'
 
 /**
  * Maps one OT_TabItem / OT_TabItemBlock content object into the flat
@@ -20,6 +21,6 @@ export function buildTabItemFromContent(item: any, src: (ref: any) => string | u
     imageSrc:  src(item?.image) ?? item?.imageSrc ?? undefined,
     imageAlt:  item?.imageAlt        ?? '',
     ctaLabel:  item?.ctaLabel        ?? undefined,
-    ctaUrl:    item?.ctaUrl?.default ?? item?.ctaUrl ?? undefined,
+    ctaUrl:    resolveCmsUrl(item?.ctaUrl),
   }
 }

@@ -5,6 +5,7 @@ import { OT_FooterBlock as OT_FooterBlockContentType } from '@/cms/content-types
 import Image from 'next/image'
 import Link from 'next/link'
 import { richTextJson } from '@/lib/richTextJson'
+import { resolveCmsUrl } from '@/lib/resolveCmsUrl'
 
 type Props = {
   content: ContentProps<typeof OT_FooterBlockContentType>
@@ -40,7 +41,7 @@ export default function OT_FooterBlockAdapter({ content }: Props) {
   type FooterLink = { label: string; href: string }
   const links: FooterLink[] = Array.isArray(content.links)
     ? (content.links as any[])
-        .map((l: any) => ({ label: l.label ?? '', href: l.url?.default ?? '#' }))
+        .map((l: any) => ({ label: l.label ?? '', href: resolveCmsUrl(l.url) ?? '#' }))
         .filter((l: FooterLink) => l.label)
     : []
 

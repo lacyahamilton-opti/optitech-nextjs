@@ -39,6 +39,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isSupportedLocale, DEFAULT_LOCALE } from '@/lib/i18n/config'
 import type { Locale } from '@/lib/i18n/config'
 import { verifySessionToken, SESSION_COOKIE } from '@/lib/admin/auth'
+import { ACQ_COOKIE, ACQ_MAX_AGE, captureAcquisition } from '@/lib/acquisition'
 
 /** Header name used by next-intl server APIs (getLocale, getRequestConfig). */
 const LOCALE_HEADER = 'X-NEXT-INTL-LOCALE'
@@ -89,7 +90,24 @@ export default async function proxy(request: NextRequest) {
     mintedVisitorId = crypto.randomUUID()
     request.cookies.set(USER_ID_COOKIE, mintedVisitorId)
   }
+  // First-touch acquisition (UTM / external referrer) — recorded once, never
+  // overwritten; see lib/acquisition.ts. Set on the request too so this render's
+  // FX decision can use it.
+  const acquisition = request.cookies.get(ACQ_COOKIE)?.value
+    ? null
+    : captureAcquisition(request.nextUrl, request.headers.get('host'), request.headers.get('referer'))
+  if (acquisition) request.cookies.set(ACQ_COOKIE, acquisition)
+
   const setVisitorId = (res: NextResponse): NextResponse => {
+    if (acquisition) {
+      res.cookies.set(ACQ_COOKIE, acquisition, {
+        httpOnly: false, // read by the storefront for purchase tags
+        secure:   process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path:     '/',
+        maxAge:   ACQ_MAX_AGE,
+      })
+    }
     if (mintedVisitorId) {
       res.cookies.set(USER_ID_COOKIE, mintedVisitorId, {
         httpOnly: false, // Web Exp (BYOID) + ODP client read this in the browser
@@ -148,6 +166,9 @@ export default async function proxy(request: NextRequest) {
   // (not the response) so it flows through to the server-side handlers.
   const headers = new Headers(request.headers)
   headers.set(LOCALE_HEADER, locale)
+  // Layouts cannot see the URL; expose the locale-stripped path so the site layout
+  // can look up the page type and drop the shell for standalone pages.
+  headers.set('x-internal-path', internalPath)
 
   // ── 3. Rewrite or pass through ────────────────────────────────────────────
   if (internalPath !== pathname) {

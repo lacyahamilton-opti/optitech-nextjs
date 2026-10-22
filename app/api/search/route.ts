@@ -1,6 +1,12 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { getClient } from '@/lib/optimizely'
-import { DEFAULT_LOCALE } from '@/lib/i18n/config'
+import { DEFAULT_LOCALE, isSupportedLocale } from '@/lib/i18n/config'
+import { searchProducts, withCatalogLocale } from '@/lib/catalog'
+import { getCommerceSettings, currencyForLocale } from '@/lib/commerce/settings'
+import { MARKET_COOKIE } from '@/lib/commerce/market'
+import { withPricing } from '@/lib/commerce/pricing'
+import { priceIn } from '@/lib/commerce/card'
+import { formatMoney } from '@/lib/commerce/money'
 import type { SearchResult } from '@/lib/search'
 import { formatEventLocation } from '@/lib/eventFormat'
 
@@ -333,16 +339,17 @@ function buildLocationQuery(semantic: boolean, withSiteKey: boolean): string {
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
   const q        = (searchParams.get('q') ?? '').trim()
-  const type     = (searchParams.get('type') ?? 'all') as 'all' | 'Blog' | 'Page' | 'Event' | 'Location' | 'Practitioner' | 'Experience'
+  const type     = (searchParams.get('type') ?? 'all') as 'all' | 'Blog' | 'Page' | 'Event' | 'Location' | 'Practitioner' | 'Experience' | 'Product'
   const semantic = searchParams.get('semantic') === 'true'
   const limit    = 16
 
   if (q.length < 2) return NextResponse.json([])
 
   // ── Locale resolution ────────────────────────────────────────────────────
-  // x-locale is set by middleware for every request. Falls back to the default
-  // locale so search always has a locale constraint even without a prefix.
-  const locale = req.headers.get('x-locale') ?? DEFAULT_LOCALE
+  // /api is outside the proxy matcher, so the client passes ?locale= (SiteSearch
+  // sends its active locale). x-locale is kept as a fallback for other callers.
+  const localeParam = searchParams.get('locale')
+  const locale = isSupportedLocale(localeParam) ? localeParam : (req.headers.get('x-locale') ?? DEFAULT_LOCALE)
 
   // ── Site scope resolution ────────────────────────────────────────────────
   // Priority: (1) caller-supplied ?domain= param (server adapters that know
@@ -418,6 +425,34 @@ export async function GET(req: NextRequest) {
 
   const results: SearchResult[] = []
   const seen = new Set<string>()
+
+  // ── Product results (storefront sites only) ──────────────────────────────
+  // First, so shoppers see products above editorial. Catalog products come from
+  // the Graph external source scoped to this site's catalog, with the FX price
+  // treatment applied like everywhere else on the storefront.
+  if (type === 'all' || type === 'Product') {
+    try {
+      const commerce = await getCommerceSettings(req.headers.get('host') ?? req.nextUrl.host)
+      if (commerce) {
+        const currency = currencyForLocale(commerce, locale, req.cookies.get(MARKET_COOKIE)?.value)
+        const products = await withCatalogLocale(locale, () => searchProducts(commerce.catalogId, q, { semantic, limit: type === 'Product' ? 16 : 6 }).then(withPricing))
+        for (const p of products) {
+          const price = priceIn(p.fromPrices, currency)
+          results.push({
+            id:       `product:${p.handle}`,
+            title:    p.name,
+            url:      p.url,
+            type:     'Product',
+            excerpt:  p.description.slice(0, 160),
+            imageUrl: p.colours[0]?.images[0] || undefined,
+            price:    formatMoney(price.amount, price.currency, locale),
+          })
+        }
+      }
+    } catch (err) {
+      console.error('[search] product query failed:', err)
+    }
+  }
 
   // ── Blog results ─────────────────────────────────────────────────────────
   if (type === 'all' || type === 'Blog') {

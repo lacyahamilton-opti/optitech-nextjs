@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
+import { AI_CRAWLERS, INDEXING_ALLOWED } from "./lib/indexing";
 
 // Point next-intl at our server config so getLocale() works in any
 // server component or route handler without the [locale] folder pattern.
@@ -47,6 +48,15 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     return [
+      // Keep the demo out of search results unless ALLOW_INDEXING=true. AI crawlers
+      // are exempt (matched by user agent) so they can still analyse the site.
+      ...(INDEXING_ALLOWED
+        ? []
+        : [{
+            source: "/(.*)",
+            missing: [{ type: "header" as const, key: "user-agent", value: `.*(${AI_CRAWLERS.join("|")}).*` }],
+            headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow, noarchive, nosnippet" }],
+          }]),
       {
         // Allow all Optimizely SaaS CMS instances to embed this app in the Visual Builder iframe.
         source: "/(.*)",

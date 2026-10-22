@@ -1,11 +1,9 @@
 import type { FeatureItem } from '@/components/blocks/FeatureTile'
 import { richTextJson } from '@/lib/richTextJson'
+import { resolveCmsUrl } from '@/lib/resolveCmsUrl'
 
 export function resolveUrl(v: unknown): string | undefined {
-  if (!v) return undefined
-  if (typeof v === 'string') return v
-  if (typeof v === 'object' && v !== null && 'default' in v) return String((v as Record<string, unknown>).default)
-  return undefined
+  return resolveCmsUrl(v as Parameters<typeof resolveCmsUrl>[0])
 }
 
 /**

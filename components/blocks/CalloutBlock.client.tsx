@@ -223,7 +223,7 @@ export default function CalloutBlockClient({
 
     // Outer block wrapper handles max-width centering (separate from sticky flex container)
     const barContent = (
-      <div className={cn('w-full', maxWidthWrapper)}>{barInner}</div>
+      <div className={cn('w-full', maxWidthWrapper)} data-block="callout-bar">{barInner}</div>
     )
 
     if (!dismissible) return barContent
@@ -294,7 +294,7 @@ export default function CalloutBlockClient({
   // where they'd otherwise butt straight up against whatever sits above/below.
   // Bar is exempt: it's meant to sit flush (e.g. a sticky top-of-page notice).
   const calloutContent = (
-    <div className={cn('w-full my-xl', maxWidthWrapper)}>{calloutInner}</div>
+    <div className={cn('w-full my-xl', maxWidthWrapper)} data-block="callout">{calloutInner}</div>
   )
 
   if (!dismissible) return calloutContent

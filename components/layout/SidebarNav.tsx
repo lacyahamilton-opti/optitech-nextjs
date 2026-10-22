@@ -9,11 +9,14 @@ import { SidebarNavShell } from '@/components/layout/SidebarNavClient'
 import SearchTrigger from '@/components/search/SearchTrigger'
 import { draftMode } from 'next/headers'
 import { getSiteSettings, getRequestDomain, getRequestLocale } from '@/lib/optimizely'
+import CommerceHeaderActions from '@/components/commerce/CommerceHeaderActions'
+import { getHeaderCommerce } from '@/lib/commerce/settings'
 import { getEnabledLanguages } from '@/lib/i18n/getEnabledLanguages'
 import { t } from '@/lib/i18n/t'
 import { localizedHref, stripLocalePrefix } from '@/lib/i18n/config'
 import type { Locale } from '@/lib/i18n/config'
 import type { NavItem } from '@/components/layout/DesktopNav'
+import { resolveCmsUrl } from '@/lib/resolveCmsUrl'
 
 const FALLBACK_NAV: NavItem[] = [
   { label: 'Product',  href: '#' },
@@ -61,6 +64,7 @@ export default async function SidebarNav() {
   const domain   = await getRequestDomain()
   const locale   = await getRequestLocale()
   const settings = await getSiteSettings(domain, locale)
+  const commerce = await getHeaderCommerce(domain)
 
   const siteName       = (settings?.siteName as string | undefined) ?? 'Site Accelerator'
   const logoSrc        = settings?.logo?.url?.default
@@ -68,7 +72,9 @@ export default async function SidebarNav() {
   const logoFit        = (settings?.logoFit as string | undefined) ?? 'full'
   const logoInvertDark = settings?.logoInvertDark === true
   const ctaLabel       = settings?.ctaLabel ?? 'Get Started'
-  const ctaHref        = normalizeNavHref(settings?.ctaUrl?.default, locale, domain)
+  // Storefronts lead with the bag, not a CTA: hide it unless one is authored.
+  const showCta        = !(commerce.enabled && !settings?.ctaLabel)
+  const ctaHref        = normalizeNavHref(resolveCmsUrl(settings?.ctaUrl, domain), locale, domain)
 
   const LOGO_IMG_CLASS: Record<string, string> = {
     full:    'max-h-10 w-auto',
@@ -85,11 +91,11 @@ export default async function SidebarNav() {
   const navItems: NavItem[] = settings?.primaryNavigation?.length
     ? settings.primaryNavigation.map((item: any) => ({
         label:    item.menuLink?.text ?? '',
-        href:     normalizeNavHref(item.menuLink?.url?.default, locale, domain),
+        href:     normalizeNavHref(resolveCmsUrl(item.menuLink?.url, domain), locale, domain),
         children: item.subNavItems?.length
           ? item.subNavItems.map((c: any) => ({
               label:       c.menuLink?.text ?? '',
-              href:        normalizeNavHref(c.menuLink?.url?.default, locale, domain),
+              href:        normalizeNavHref(resolveCmsUrl(c.menuLink?.url, domain), locale, domain),
               description: c.description ?? undefined,
               icon:        c.icon && c.icon !== 'none' ? c.icon : undefined,
             }))
@@ -153,13 +159,16 @@ export default async function SidebarNav() {
           style={{ background: 'linear-gradient(to right, transparent, var(--ot-brand) 20%, var(--ot-accent) 80%, transparent)' }}
         />
         <div className="p-md shrink-0 space-y-sm">
-          <Button href={ctaHref} size="sm" className="w-full justify-center">
-            {ctaLabel}
-          </Button>
+          {showCta && (
+            <Button href={ctaHref} size="sm" className="w-full justify-center">
+              {ctaLabel}
+            </Button>
+          )}
           <div className="flex items-center gap-xs">
             <SearchTrigger />
             <LocaleSelector enabledLocales={enabledLocales} />
             <ThemeToggle />
+            {commerce.enabled && <CommerceHeaderActions initialBagCount={commerce.bagCount} />}
           </div>
         </div>
       </SidebarNavShell>
@@ -177,7 +186,8 @@ export default async function SidebarNav() {
           <div className="flex items-center gap-sm">
             <SearchTrigger />
             <ThemeToggle />
-            <MobileMenu navItems={navItems} ctaLabel={ctaLabel} ctaHref={ctaHref} enabledLocales={enabledLocales} />
+            {commerce.enabled && <CommerceHeaderActions initialBagCount={commerce.bagCount} showWishlist={false} showAccount />}
+            <MobileMenu navItems={navItems} ctaLabel={showCta ? ctaLabel : ''} ctaHref={ctaHref} enabledLocales={enabledLocales} />
           </div>
         </div>
       </header>

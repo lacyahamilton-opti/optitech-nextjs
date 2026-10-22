@@ -19,6 +19,11 @@
  *
  * enabledLocales prop: array of locale codes to display, sourced from the CMS
  * ThemeManager. Falls back to SUPPORTED_LOCALES when not provided or empty.
+ *
+ * Storefront sites (inside CommerceProvider) also offer "English (UK)": same
+ * English URLs, plus the `ot_market=uk` cookie that switches prices to GBP and
+ * sizes to UK labels (lib/commerce/market.ts). The trigger then shows the
+ * currency too ("UK · £").
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react'
@@ -26,6 +31,39 @@ import { SUPPORTED_LOCALES, getLocaleMeta, localizedHref, isSupportedLocale } fr
 import type { Locale } from '@/lib/i18n/config'
 import { useLocale } from '@/lib/i18n/LocaleProvider'
 import { useTranslation } from '@/lib/i18n/useTranslation'
+import { useCommerce } from '@/components/commerce/CommerceProvider'
+import { writeMarketCookie } from '@/lib/commerce/market'
+
+/** One row in the picker: a locale, optionally pinned to the UK market. */
+type Option = { id: string; locale: Locale; native: string; code: string; uk: boolean }
+
+const CURRENCY_SYMBOL: Record<string, string> = { USD: '$', GBP: '£', EUR: '€' }
+
+function useOptions(visibleLocales: Locale[]): { options: Option[]; activeId: string; storefront: boolean; currencySymbol: string } {
+  const locale = useLocale()
+  const { enabled, market, currency } = useCommerce()
+  const options: Option[] = []
+  for (const loc of visibleLocales) {
+    const lm = getLocaleMeta(loc)
+    options.push({ id: loc, locale: loc, native: lm.native, code: lm.code, uk: false })
+    if (enabled && loc === 'en') options.push({ id: 'en-uk', locale: 'en', native: 'English (UK)', code: 'UK', uk: true })
+  }
+  return {
+    options,
+    activeId: locale === 'en' && market === 'uk' ? 'en-uk' : locale,
+    storefront: enabled,
+    currencySymbol: CURRENCY_SYMBOL[currency] ?? '',
+  }
+}
+
+/** Navigate to `opt`: set the locale + market cookies, then load the localized URL. */
+function goTo(opt: Option) {
+  try {
+    document.cookie = `NEXT_LOCALE=${opt.locale}; path=/; max-age=31536000; SameSite=Lax`
+  } catch { /* private-mode or restricted context — safe to swallow */ }
+  writeMarketCookie(opt.uk ? 'uk' : null)
+  window.location.href = localizedHref(getBrowserPathname(), opt.locale)
+}
 
 /**
  * Returns the real browser URL path — important because Next.js proxy/middleware
@@ -46,7 +84,6 @@ type LocaleSelectorProps = {
 // ── Desktop trigger + dropdown ────────────────────────────────────────────────
 
 export function LocaleSelector({ enabledLocales }: LocaleSelectorProps) {
-  const locale   = useLocale()
   const { t }    = useTranslation()
   const [open, setOpen] = useState(false)
   const containerRef    = useRef<HTMLDivElement>(null)
@@ -63,8 +100,7 @@ export function LocaleSelector({ enabledLocales }: LocaleSelectorProps) {
     ? enabledLocales.filter(isSupportedLocale)
     : [...SUPPORTED_LOCALES]
 
-  // If the site only has one language configured, don't render the selector at all
-  if (visibleLocales.length <= 1) return null
+  const { options, activeId, storefront, currencySymbol } = useOptions(visibleLocales)
 
   // Close on outside click
   useEffect(() => {
@@ -93,26 +129,21 @@ export function LocaleSelector({ enabledLocales }: LocaleSelectorProps) {
     }
   }, [open])
 
-  function selectLocale(next: Locale) {
+  // Write the NEXT_LOCALE cookie BEFORE navigating (goTo). next-intl's middleware
+  // reads it for locale detection; without it, going back to English ('/') with a
+  // stale 'es' cookie redirects to '/es/' again. goTo also uses the real browser
+  // path (window.location.pathname) — usePathname() returns the rewritten path
+  // without the locale prefix.
+  function select(opt: Option) {
     close()
-    if (next === locale) return
-    // Write the NEXT_LOCALE cookie BEFORE navigating. next-intl's middleware
-    // reads this cookie for locale detection. Without this, navigating back to
-    // English ('/') while a stale 'es' cookie is present causes the middleware
-    // to redirect the user back to '/es/' immediately, making English unreachable.
-    // Setting the cookie here ensures the middleware sees the new locale on the
-    // very next request, so no redirect loop occurs.
-    try {
-      document.cookie = `NEXT_LOCALE=${next}; path=/; max-age=31536000; SameSite=Lax`
-    } catch { /* private-mode or restricted context — safe to swallow */ }
-    // Use the actual browser URL (window.location.pathname) not the Next.js
-    // rewritten path (usePathname). next-intl middleware rewrites /es/about →
-    // /about internally, so usePathname() returns '/about' — missing the prefix.
-    // window.location.pathname always shows the real URL bar value.
-    window.location.href = localizedHref(getBrowserPathname(), next)
+    if (opt.id === activeId) return
+    goTo(opt)
   }
 
-  const meta = getLocaleMeta(locale)
+  const active = options.find((o) => o.id === activeId) ?? options[0]
+
+  // If the site only has one choice, don't render the selector at all
+  if (options.length <= 1) return null
 
   return (
     <div ref={containerRef} className="relative">
@@ -129,7 +160,7 @@ export function LocaleSelector({ enabledLocales }: LocaleSelectorProps) {
                    focus-visible:outline-2 focus-visible:outline-brand focus-visible:outline-offset-[3px]"
       >
         <GlobeIcon />
-        <span className="tracking-wide">{meta.code}</span>
+        <span className="tracking-wide">{active.code}{storefront && currencySymbol ? ` · ${currencySymbol}` : ''}</span>
         <ChevronIcon open={open} />
       </button>
 
@@ -144,18 +175,17 @@ export function LocaleSelector({ enabledLocales }: LocaleSelectorProps) {
                      min-w-[180px]
                      motion-safe:animate-dropdown-in"
         >
-          {visibleLocales.map((loc: Locale, i) => {
-            const lm       = getLocaleMeta(loc)
-            const isActive = loc === locale
+          {options.map((opt, i) => {
+            const isActive = opt.id === activeId
 
             return (
               <button
-                key={loc}
+                key={opt.id}
                 ref={i === 0 ? firstItemRef : undefined}
                 role="option"
                 aria-selected={isActive}
                 type="button"
-                onClick={() => selectLocale(loc)}
+                onClick={() => select(opt)}
                 className="w-full flex items-center justify-between gap-md
                            px-md py-sm
                            text-left
@@ -174,10 +204,10 @@ export function LocaleSelector({ enabledLocales }: LocaleSelectorProps) {
                   <span className={`text-sm font-semibold transition-colors duration-100 ${
                     isActive ? 'text-accent' : 'text-fg group-hover:text-fg'
                   }`}>
-                    {lm.native}
+                    {opt.native}
                   </span>
                 </span>
-                <span className="text-label text-fg-muted shrink-0">{lm.code}</span>
+                <span className="text-label text-fg-muted shrink-0">{opt.code}</span>
               </button>
             )
           })}
@@ -196,25 +226,21 @@ export function LocaleSelectorMobile({
   onSelect?: () => void
   enabledLocales?: string[]
 }) {
-  const locale = useLocale()
   const { t }  = useTranslation()
 
   const visibleLocales: Locale[] = enabledLocales?.length
     ? enabledLocales.filter(isSupportedLocale)
     : [...SUPPORTED_LOCALES]
 
-  // Don't render if only one language is configured
-  if (visibleLocales.length <= 1) return null
+  const { options, activeId } = useOptions(visibleLocales)
 
-  function selectLocale(next: Locale) {
-    if (next === locale) { onSelect?.(); return }
+  // Don't render if only one choice is configured
+  if (options.length <= 1) return null
+
+  function select(opt: Option) {
     onSelect?.()
-    // Write NEXT_LOCALE cookie before navigating — prevents stale-cookie redirect loop.
-    // See desktop selectLocale() above for full explanation.
-    try {
-      document.cookie = `NEXT_LOCALE=${next}; path=/; max-age=31536000; SameSite=Lax`
-    } catch { /* private-mode or restricted context — safe to swallow */ }
-    window.location.href = localizedHref(getBrowserPathname(), next)
+    if (opt.id === activeId) return
+    goTo(opt) // writes NEXT_LOCALE first — see the desktop select() note
   }
 
   return (
@@ -223,15 +249,14 @@ export function LocaleSelectorMobile({
         {t('locale.selector')}
       </p>
       <div className="grid grid-cols-2 gap-xs">
-        {visibleLocales.map((loc: Locale) => {
-          const lm       = getLocaleMeta(loc)
-          const isActive = loc === locale
+        {options.map((opt) => {
+          const isActive = opt.id === activeId
 
           return (
             <button
-              key={loc}
+              key={opt.id}
               type="button"
-              onClick={() => selectLocale(loc)}
+              onClick={() => select(opt)}
               className={`flex items-center justify-between px-sm py-xs
                           border transition-colors duration-150 ease-quick
                           text-sm font-semibold
@@ -240,8 +265,8 @@ export function LocaleSelectorMobile({
                             : 'border-fg/15 text-fg-muted hover:border-fg/30 hover:text-fg'
                           }`}
             >
-              <span>{lm.native}</span>
-              <span className="text-label opacity-60">{lm.code}</span>
+              <span>{opt.native}</span>
+              <span className="text-label opacity-60">{opt.code}</span>
             </button>
           )
         })}

@@ -5,6 +5,7 @@ import { OT_VideoBlock as OT_VideoBlockContentType } from '@/cms/content-types/O
 import { getVideoStyles } from '@/cms/styling/OT_VideoBlock.styling'
 import VideoBlock from '@/components/blocks/VideoBlock'
 import { sanitizeCmsHtml } from '@/lib/sanitizeHtml'
+import { resolveCmsUrl } from '@/lib/resolveCmsUrl'
 
 type Props = {
   content: ContentProps<typeof OT_VideoBlockContentType>
@@ -116,7 +117,7 @@ export default function OT_VideoBlock({ content, displaySettings = {} }: Props) 
           {content.ctaUrl?.default && (
             <div className="mt-sm">
               <a
-                href={content.ctaUrl.default}
+                href={resolveCmsUrl(content.ctaUrl)}
                 className={`btn-signal inline-flex items-center gap-sm px-lg py-sm text-label font-semibold uppercase tracking-wide motion-safe:transition-colors motion-safe:duration-200 ease-quick ${onBrand ? 'bg-fg-on-brand text-brand' : 'bg-brand text-fg-on-brand'}`}
               >
                 {content.ctaLabel || 'Learn more'}

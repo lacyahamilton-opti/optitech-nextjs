@@ -73,7 +73,7 @@ export default function FormWrapper({ steps, title, description, submitUrl, conf
 
   if (status === 'submitted') {
     return (
-      <div className="relative w-full bg-surface border border-fg/10 shadow-[0_4px_24px_var(--ot-bloom-brand-faint)] px-lg py-lg my-lg lg:my-xl">
+      <div data-form-card className="relative w-full bg-surface border border-fg/10 shadow-[0_4px_24px_var(--ot-bloom-brand-faint)] px-lg py-lg my-lg lg:my-xl">
         <div aria-hidden="true" className="absolute inset-x-0 top-0 h-[2px] bg-brand" />
         <p className="text-body leading-body text-fg">
           {confirmationMessage ?? 'Thank you. Your submission has been received.'}
@@ -83,7 +83,7 @@ export default function FormWrapper({ steps, title, description, submitUrl, conf
   }
 
   return (
-    <div className="relative w-full bg-surface border border-fg/10 shadow-[0_4px_24px_var(--ot-bloom-brand-faint)] px-lg py-lg my-lg lg:my-xl">
+    <div data-form-card className="relative w-full bg-surface border border-fg/10 shadow-[0_4px_24px_var(--ot-bloom-brand-faint)] px-lg py-lg my-lg lg:my-xl">
       {/* 2px brand rule at the top of the form card */}
       <div aria-hidden="true" className="absolute inset-x-0 top-0 h-[2px] bg-brand" />
 
@@ -136,7 +136,7 @@ export default function FormWrapper({ steps, title, description, submitUrl, conf
           )}
 
           {steps.length > 1 && (
-            <div className="mt-lg flex items-center justify-between border-t border-fg/10 pt-lg">
+            <div data-step-nav className="mt-lg flex items-center justify-between border-t border-fg/10 pt-lg">
               <Button
                 type="button"
                 variant="ghost"

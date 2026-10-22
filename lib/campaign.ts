@@ -1,5 +1,6 @@
 import { cache } from 'react'
 import { getClient } from '@/lib/optimizely'
+import { resolveCmsUrl } from '@/lib/resolveCmsUrl'
 
 // ─── Slot item types ──────────────────────────────────────────────────────────
 
@@ -145,9 +146,9 @@ const PAGE_QUERY = `
             headline
             body
             primaryCtaLabel
-            primaryCtaUrl    { default }
+            primaryCtaUrl    { default base }
             secondaryCtaLabel
-            secondaryCtaUrl  { default }
+            secondaryCtaUrl  { default base }
             visual           { url { default } }
             visualAlt
           }
@@ -165,12 +166,12 @@ const PAGE_QUERY = `
             heading
             subheading
             ctaLabel
-            ctaUrl { default }
+            ctaUrl { default base }
             features {
               headline
               body     { json }
               ctaLabel
-              ctaUrl   { default }
+              ctaUrl   { default base }
             }
           }
           ... on OT_TabsBlock {
@@ -182,7 +183,7 @@ const PAGE_QUERY = `
               heading
               body     { json }
               ctaLabel
-              ctaUrl   { default }
+              ctaUrl   { default base }
             }
           }
         }
@@ -212,7 +213,7 @@ const PAGE_QUERY = `
             heading
             body { json }
             ctaLabel
-            ctaUrl { default }
+            ctaUrl { default base }
           }
           ... on OT_ImageBlock {
             image { url { default } }
@@ -222,7 +223,7 @@ const PAGE_QUERY = `
             heading
             body { json }
             ctaLabel
-            ctaUrl { default }
+            ctaUrl { default base }
           }
         }
         seoTitle
@@ -269,9 +270,9 @@ function mapHeroItem(raw: any): CampaignHeroSlot | null {
     headline:          raw.headline          ?? '',
     body:              raw.body              ?? null,
     primaryCtaLabel:   raw.primaryCtaLabel   ?? null,
-    primaryCtaUrl:     raw.primaryCtaUrl?.default  ?? null,
+    primaryCtaUrl:     resolveCmsUrl(raw.primaryCtaUrl)  ?? null,
     secondaryCtaLabel: raw.secondaryCtaLabel ?? null,
-    secondaryCtaUrl:   raw.secondaryCtaUrl?.default ?? null,
+    secondaryCtaUrl:   resolveCmsUrl(raw.secondaryCtaUrl) ?? null,
     visualSrc:         raw.visual?.url?.default ?? null,
     visualAlt:         raw.visualAlt         ?? null,
   }
@@ -294,12 +295,12 @@ function mapBodyItem(raw: any): CampaignBodyItem {
         heading:    raw.heading    ?? null,
         subheading: raw.subheading ?? null,
         ctaLabel:   raw.ctaLabel   ?? null,
-        ctaUrl:     raw.ctaUrl?.default ?? null,
+        ctaUrl:     resolveCmsUrl(raw.ctaUrl) ?? null,
         features: (raw.features ?? []).map((f: any) => ({
           headline: f.headline ?? '',
           body:     f.body?.json ?? null,
           ctaLabel: f.ctaLabel  ?? null,
-          ctaUrl:   f.ctaUrl?.default ?? null,
+          ctaUrl:   resolveCmsUrl(f.ctaUrl) ?? null,
         })),
       }
     case 'OT_TabsBlock':
@@ -313,7 +314,7 @@ function mapBodyItem(raw: any): CampaignBodyItem {
           heading:  t.heading  ?? null,
           body:     t.body?.json ?? null,
           ctaLabel: t.ctaLabel ?? null,
-          ctaUrl:   t.ctaUrl?.default ?? null,
+          ctaUrl:   resolveCmsUrl(t.ctaUrl) ?? null,
         })),
       }
     default:
@@ -353,7 +354,7 @@ function mapClosingItem(raw: any): CampaignClosingItem {
         heading:    raw.heading  ?? null,
         body:       raw.body?.json ?? null,
         ctaLabel:   raw.ctaLabel ?? null,
-        ctaUrl:     raw.ctaUrl?.default ?? null,
+        ctaUrl:     resolveCmsUrl(raw.ctaUrl) ?? null,
       }
     case 'OT_ImageBlock':
       return {
@@ -365,7 +366,7 @@ function mapClosingItem(raw: any): CampaignClosingItem {
         heading:    raw.heading  ?? null,
         body:       raw.body?.json ?? null,
         ctaLabel:   raw.ctaLabel ?? null,
-        ctaUrl:     raw.ctaUrl?.default ?? null,
+        ctaUrl:     resolveCmsUrl(raw.ctaUrl) ?? null,
       }
     default:
       return { __typename: '__unknown__', typeName: raw.__typename ?? 'Unknown' }

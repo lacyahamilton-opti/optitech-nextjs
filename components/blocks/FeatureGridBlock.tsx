@@ -171,6 +171,7 @@ export default function FeatureGridBlock({
       ref={ref}
       className={sectionCva({ color })}
       aria-label={heading ?? 'Features'}
+      data-block="feature"
     >
       {/* ── Section header ──────────────────────────────────────────────── */}
       {hasHeader && (

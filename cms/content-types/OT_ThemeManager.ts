@@ -142,6 +142,8 @@ export const OT_ThemeManager = contentType({
         { value: 'sora',          displayName: 'Sora — squared, technical' },
         { value: 'plusJakarta',   displayName: 'Plus Jakarta Sans — warm, modern' },
         { value: 'manrope',       displayName: 'Manrope — clean, minimal' },
+        { value: 'hankenGrotesk', displayName: 'Hanken Grotesk — neo-grotesk, fashion / editorial retail' },
+        { value: 'fraunces',      displayName: 'Fraunces — soft serif, warm and characterful (serif)' },
       ],
     },
     motionIntensity: {
@@ -278,6 +280,39 @@ export const OT_ThemeManager = contentType({
       description: 'GA4 Measurement ID (e.g. G-LGLHDKGRA4F). When set, the gtag.js snippet is injected for this domain and pageviews are tracked automatically.',
       group: 'OT_Integrations',
       sortOrder: 80,
+    },
+
+    // ── Mock commerce (opt-in per site) ───────────────────────────────────────
+    // Read by lib/commerce/settings.ts through its OWN query (never THEME_QUERY),
+    // so a Graph schema lag can only switch commerce off — never blank a site's
+    // theme. Unset/false = no bag, wishlist, PLP data or product routes at all.
+    enableCommerce: {
+      type: 'boolean',
+      displayName: 'Enable Mock Commerce (bag, wishlist, product pages)',
+      description: 'Turns on the storefront for this domain: bag and wishlist icons in the header, the mini-bag, /products/<handle> product pages, and live data in Product Listing / Commerce Flow blocks. Orders are simulated in the visitor\'s browser only — no commerce system is called.',
+      group: 'OT_Integrations',
+      sortOrder: 90,
+    },
+    catalogId: {
+      type: 'string',
+      maxLength: 40,
+      displayName: 'Product Catalog ID',
+      description: 'Which catalog in the Optimizely Graph product source this site sells (e.g. apparel). Must match the CatalogId pushed by scripts/catalog/push-catalog.mjs (or the OCP connector).',
+      group: 'OT_Integrations',
+      sortOrder: 95,
+    },
+    currencyCode: {
+      type: 'string',
+      format: 'selectOne',
+      displayName: 'Store Currency',
+      description: 'Default currency for prices, the bag and checkout. French and German locales show EUR; English shows this currency.',
+      group: 'OT_Integrations',
+      sortOrder: 100,
+      enum: [
+        { value: 'USD', displayName: 'US dollar (USD)' },
+        { value: 'GBP', displayName: 'Pound sterling (GBP)' },
+        { value: 'EUR', displayName: 'Euro (EUR)' },
+      ],
     },
   },
 })

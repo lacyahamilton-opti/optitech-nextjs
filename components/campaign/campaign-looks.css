@@ -1,0 +1,792 @@
+/**
+ * Campaign looks: the identity engine for OT_CampaignLandingPage.
+ *
+ * Imported by CampaignLandingFrame, so it only ships on campaign pages. Unlayered on
+ * purpose: it must beat Tailwind's layered utilities (bg-canvas, text-fg ...) so every
+ * block placed on the page re-skins without being edited.
+ *
+ * How it works
+ *   1. The frame sets data-look / data-motion / data-theme and ONE inline
+ *      variable, --cl-seed (the editor's accent override, else the site brand).
+ *   2. Each look re-points the theme tokens (--ot-canvas, --ot-fg, --ot-brand ...) at
+ *      colours derived from the seed with OKLCH relative colour. Blocks inherit.
+ *   3. Fills sit on FIXED lightness steps and only take hue + clamped chroma from the
+ *      seed, so text on a fill has a known contrast whatever colour is supplied.
+ *   4. Opt-in block variants hook the stable data-block attribute (hero, stat, cta,
+ *      quote). Nothing here animates layout properties; motion is transform, opacity,
+ *      clip-path and background-position only.
+ *
+ * Contrast notes (WCAG 2.1 AA, all text):
+ *   Blueprint  ink .22 on paper .975; paper .985 on brand .36
+ *   Comic      ink .20 on canvas .975 / accent .82; paper on brand .46
+ *   Stage      fg .965 on canvas .12; dark ink .14 on hot .78
+ *   Poster     deep fill .45 carries ink .985; bright fill .86 carries ink .16
+ */
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * Shared
+ * ════════════════════════════════════════════════════════════════════════════ */
+.ot-campaign {
+  background: var(--ot-canvas);
+  color: var(--ot-fg);
+  /* Ambient-motion duration multiplier: Calm slows everything down. */
+  --cl-dur: 1;
+}
+.ot-campaign[data-motion="calm"] { --cl-dur: 2.4; }
+
+/* Blocks that paint the canvas turn transparent so the atmosphere shows through. */
+.ot-campaign-body .bg-canvas { background-color: transparent; }
+.ot-campaign-body .hero-atmos { display: none; }
+
+.ot-campaign-stage { position: relative; isolation: isolate; flex: 1 1 auto; }
+.ot-cl-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 0; }
+.ot-cl-layer > * { position: absolute; }
+.ot-campaign-body { position: relative; z-index: 1; margin-inline: auto; width: 100%; max-width: 90rem; }
+
+/* Reading size for every campaign look: body copy 20px (site default 16px), card titles 22px.
+   Set on the frame and any nested [data-theme] panel so Tailwind's text-body / text-title follow. */
+.ot-campaign, .ot-campaign [data-theme] { --ot-text-body: 1.25rem; --ot-text-title: 1.4rem; }
+
+/* Strip */
+.ot-cl-strip { border-bottom: 1px solid oklch(from var(--ot-fg) l c h / 0.12); background: var(--ot-canvas); }
+
+/* The hero marquee is hidden everywhere; only Poster and Stage switch it on. */
+.ot-campaign .hero-marquee { display: none; }
+
+/* Mobile bottom CTA bar (rendered by the frame, hidden at md and up). */
+.ot-cl-mobilebar {
+  position: fixed; inset-inline: 0; bottom: 0; z-index: 50;
+  padding: var(--ot-space-sm) var(--ot-space-md) calc(var(--ot-space-sm) + env(safe-area-inset-bottom));
+  background: var(--ot-canvas);
+  border-top: 1px solid oklch(from var(--ot-fg) l c h / 0.14);
+  transform: translateY(0);
+  transition: transform var(--ot-dur-base) var(--ot-ease-quick);
+}
+.ot-cl-mobilebar[data-hidden="true"] { transform: translateY(110%); }
+@media (min-width: 768px) { .ot-cl-mobilebar { display: none; } }
+@media (max-width: 767px) { .ot-campaign-footer { padding-bottom: 4.5rem; } }
+
+/* Stillness: the editor's Still setting and the visitor's reduced-motion preference. */
+.ot-campaign[data-motion="still"] :is([class*="ot-cl-"], .hero-marquee__track, h1, h2, [data-block] li, [data-block] blockquote),
+.ot-campaign[data-motion="still"] :is([class*="ot-cl-"])::before {
+  animation: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ot-campaign :is([class*="ot-cl-"], .hero-marquee__track, h1, h2, [data-block] li, [data-block] blockquote) {
+    animation: none !important;
+  }
+  .ot-cl-mobilebar { transition: none; }
+}
+
+/* Token blocks below apply to the frame AND to any nested [data-theme] element inside it.
+ * Blocks pin their own data-theme (Hero brand panels, brand Stat rows, Banners), and
+ * tokens.css re-asserts the site's default dark/light tokens on those elements, which
+ * would silently undo the look. Re-applying the same values there keeps them on-look. */
+
+/* Atmosphere bands (grid + glow); used by Stage's top band. */
+.ot-cl-band { height: 40rem; left: 0; right: 0; }
+.ot-cl-band--top { top: 0; bottom: auto; }
+.ot-cl-band--bottom { top: auto; bottom: 0; }
+.ot-cl-band > * { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ot-cl-glow { background: radial-gradient(ellipse 60% 85% at 50% 0%, oklch(from var(--ot-accent) l c h / 0.14), transparent 72%); }
+.ot-cl-band--bottom .ot-cl-glow { background: radial-gradient(ellipse 60% 85% at 50% 100%, oklch(from var(--ot-accent) l c h / 0.12), transparent 72%); }
+.ot-cl-grid {
+  background-image:
+    linear-gradient(oklch(from var(--ot-accent) l c h / 0.09) 1px, transparent 1px),
+    linear-gradient(90deg, oklch(from var(--ot-accent) l c h / 0.09) 1px, transparent 1px);
+  background-size: 56px 56px; background-position: center top;
+  -webkit-mask-image: linear-gradient(to bottom, #000, transparent 92%);
+          mask-image: linear-gradient(to bottom, #000, transparent 92%);
+}
+.ot-cl-band--bottom .ot-cl-grid {
+  background-position: center bottom;
+  -webkit-mask-image: linear-gradient(to top, #000, transparent 92%);
+          mask-image: linear-gradient(to top, #000, transparent 92%);
+}
+
+/* Marquee tape (Hero variant: repeats the eyebrow). */
+.ot-campaign[data-look="stage"]  .hero-marquee { display: block; }
+.ot-campaign[data-look="stage"]  [data-block="hero"] { position: relative; overflow: hidden; }
+.ot-campaign[data-look="stage"]  [data-block="hero"]:has(.hero-marquee) > div:first-child { padding-bottom: calc(var(--ot-space-xl) + 3.25rem); }
+.hero-marquee { position: absolute; left: -2%; right: -2%; bottom: 0.6rem; z-index: 2; overflow: hidden; pointer-events: none; }
+.hero-marquee__track { display: flex; width: max-content; animation: cl-marquee calc(34s * var(--cl-dur)) linear infinite; }
+.hero-marquee__half { display: flex; flex: none; align-items: center; }
+.hero-marquee__item {
+  flex: none; padding-block: 0.7rem; padding-inline: 1.4rem;
+  font-size: var(--ot-text-label); font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; white-space: nowrap;
+}
+.hero-marquee__item::after { content: "\2726"; margin-inline-start: 2.8rem; opacity: 0.9; }
+@keyframes cl-marquee { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-50%, 0, 0); } }
+.ot-campaign[data-look="stage"]  .hero-marquee { background: var(--ot-accent); color: var(--ot-fg-on-accent); bottom: 0; left: 0; right: 0; }
+
+/* Display type is sized from the hero's own width (container query), not the viewport:
+   the headline is editor-authored, and a viewport-sized word can outgrow the text panel
+   and break mid-word. 13cqi stacked, ~7.4cqi once the text panel is a 58% column. */
+.ot-campaign[data-look="comic"] [data-block="hero"],
+.ot-campaign[data-look="neon"] [data-block="hero"],
+.ot-campaign[data-look="stage"] [data-block="hero"] { container-type: inline-size; }
+
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * COMIC: light, Full palette. Paper canvas, three derived colour roles, offset
+ * shadows, collage shapes. Playful without being childish: hard ink edges, no blur.
+ * ════════════════════════════════════════════════════════════════════════════ */
+:is(.ot-campaign[data-look="comic"], .ot-campaign[data-look="comic"] [data-theme]) {
+  --ot-brand-text:    var(--cl-brand);
+  --ot-intent-brand:  var(--cl-brand);
+  --ot-intent-brand-fg: var(--ot-fg-on-brand);
+  --cl-ink:       oklch(from var(--cl-seed) 0.20 0.030 h);
+  --cl-a:         oklch(from var(--cl-seed) 0.82 clamp(0.10, c, 0.20) h);
+  --cl-b:         oklch(from var(--cl-seed-2) 0.83 clamp(0.09, c, 0.15) h);
+  --cl-c:         oklch(from var(--cl-seed-2) 0.85 clamp(0.08, c, 0.13) calc(h + 110));
+  --cl-brand:     oklch(from var(--cl-seed) 0.46 clamp(0.09, c, 0.20) h);
+  --cl-brand-2:   oklch(from var(--cl-seed) 0.38 clamp(0.09, c, 0.20) h);
+
+  --ot-canvas:   oklch(from var(--cl-seed) 0.975 0.012 h);
+  --ot-surface:  oklch(from var(--cl-seed) 0.945 0.022 h);
+  --ot-fg:       var(--cl-ink);
+  --ot-fg-muted: oklch(from var(--cl-seed) 0.42 0.050 h);
+  /* Brand stays DEEP so brand-as-text (.accent-ink on light) reads on paper;
+     the bright fills live on the accent role. */
+  --ot-brand:        var(--cl-brand);
+  --ot-brand-hover:  var(--cl-brand-2);
+  --ot-fg-on-brand:  oklch(from var(--cl-seed) 0.985 0.008 h);
+  --ot-accent:       var(--cl-a);
+  --ot-accent-hover: oklch(from var(--cl-seed) 0.74 clamp(0.10, c, 0.20) h);
+  --ot-fg-on-accent: var(--cl-ink);
+  --ot-bloom-brand:        oklch(from var(--cl-brand) l c h / 0.35);
+  --ot-bloom-brand-ring:   oklch(from var(--cl-brand) l c h / 0.30);
+  --ot-bloom-brand-faint:  oklch(from var(--cl-brand) l c h / 0.14);
+  --ot-bloom-brand-border: oklch(from var(--cl-brand) l c h / 0.20);
+  --ot-bloom-accent:        oklch(from var(--cl-a) l c h / 0.50);
+  --ot-bloom-accent-ring:   oklch(from var(--cl-a) l c h / 0.40);
+  --ot-bloom-accent-border: oklch(from var(--cl-a) l c h / 0.30);
+  --ot-bloom-accent-faint:  oklch(from var(--cl-a) l c h / 0.16);
+  --ot-btn-ghost-fg:           var(--cl-ink);
+  --ot-btn-ghost-border:       var(--cl-ink);
+  --ot-btn-ghost-border-hover: var(--cl-ink);
+  --ot-btn-ghost-bg-hover:     oklch(from var(--cl-ink) l c h / 0.07);
+}
+.ot-campaign[data-look="comic"] .ot-cl-strip { border-bottom: 2px solid var(--cl-ink); }
+
+.ot-cl-paper {
+  inset: 0; opacity: 0.55; mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+/* Cartoon / sticker direction: ink outlines, hard offset shadows, flat color. The hero is
+   a headline-as-sticker beside a framed picture, with no floating props. */
+.ot-campaign[data-look="comic"] [data-block="hero"][class*="lg:flex-row"] > div:first-child { background: transparent; }
+.ot-campaign[data-look="comic"] [data-block="hero"] :is(h1, p) { color: var(--cl-ink); }
+.ot-campaign[data-look="comic"] [data-block="hero"][class*="lg:flex-row"] > div:first-child > div > p:first-child { color: var(--cl-brand); }
+/* Hero picture: framed, sticker-like. */
+.ot-campaign[data-look="comic"] [data-block="hero"][class*="lg:flex-row"] > div:nth-child(2) {
+  margin: var(--ot-space-md); rotate: 1deg; border: 3px solid var(--cl-ink); box-shadow: 8px 8px 0 var(--cl-ink);
+  border-radius: 1.25rem; overflow: hidden; background: var(--cl-a);
+}
+/* Hero buttons: chunky cartoon buttons. */
+.ot-campaign[data-look="comic"] [data-block="hero"] a.inline-block {
+  border: 2px solid var(--cl-ink); border-radius: 999px; color: var(--cl-ink); box-shadow: 4px 4px 0 var(--cl-ink); font-weight: 800;
+  transition: transform var(--ot-dur-fast, 150ms) var(--ot-ease-quick), box-shadow var(--ot-dur-fast, 150ms) var(--ot-ease-quick);
+}
+.ot-campaign[data-look="comic"] [data-block="hero"] a.inline-block:first-of-type { background: var(--cl-a); }
+.ot-campaign[data-look="comic"] [data-block="hero"] a.inline-block:nth-of-type(2) { background: var(--ot-canvas); }
+.ot-campaign[data-look="comic"] [data-block="hero"] a.inline-block:hover { background: var(--cl-b); color: var(--cl-ink); transform: translate(-2px, -2px); box-shadow: 6px 6px 0 var(--cl-ink); }
+.ot-campaign[data-look="comic"] [data-block="hero"] a.inline-block:active { transform: translate(3px, 3px); box-shadow: 1px 1px 0 var(--cl-ink); }
+
+.ot-campaign[data-look="comic"] [data-block="hero"] h1 {
+  font-size: clamp(2.6rem, 12cqi, 7rem); line-height: 1; letter-spacing: 0; font-weight: 900; text-wrap: balance;
+  color: var(--cl-ink);
+  /* Sharpie sticker: ink letters, a thick paper-white die-cut outline, then a hard ink shadow. */
+  -webkit-text-stroke: 0.1em oklch(from var(--cl-seed) 0.995 0.004 h);
+  paint-order: stroke fill;
+  text-shadow: 0.06em 0.08em 0 var(--cl-b), 0.06em 0.08em 0 var(--cl-ink);
+}
+.ot-campaign[data-look="comic"] [data-block="stat"] ul > li {
+  border: 2px solid var(--cl-ink); box-shadow: 5px 5px 0 var(--cl-ink); color: var(--cl-ink);
+  transition: transform var(--ot-dur-base) var(--ot-ease-quick), box-shadow var(--ot-dur-base) var(--ot-ease-quick);
+}
+.ot-campaign[data-look="comic"] [data-block="stat"] ul > li:nth-child(odd)  { background: var(--cl-a); transform: rotate(-1deg); }
+.ot-campaign[data-look="comic"] [data-block="stat"] ul > li:nth-child(even) { background: var(--cl-b); transform: rotate(0.8deg); }
+.ot-campaign[data-look="comic"] [data-block="stat"] ul > li:hover { transform: rotate(0deg) translate(-2px, -2px); box-shadow: 7px 7px 0 var(--cl-ink); }
+.ot-campaign[data-look="comic"] [data-block="stat"] ul > li :is(p, span) { color: var(--cl-ink); }
+.ot-campaign[data-look="comic"] [data-block="stat"] ul > li > span[aria-hidden="true"] { display: none; }
+.ot-campaign[data-look="comic"] [data-block="stat"] li p[aria-hidden="true"] { font-weight: 800; letter-spacing: -0.03em; }
+.ot-campaign[data-look="comic"] [data-block="quote"] figure {
+  background: var(--cl-a); border: 2px solid var(--cl-ink); box-shadow: 7px 7px 0 var(--cl-ink);
+  padding: clamp(1.5rem, 4vw, 3rem); rotate: -0.8deg; width: fit-content; max-width: 100%;
+  --ot-fg: var(--cl-ink); --ot-fg-muted: var(--cl-ink);
+}
+.ot-campaign[data-look="comic"] [data-block="quote"] .ls-wrap { --ls-settled-color: var(--cl-ink); }
+.ot-campaign[data-look="comic"] [data-block="quote"] blockquote p { font-weight: 700; letter-spacing: -0.02em; color: var(--cl-ink); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * STAGE: dark, Restrained with one hot accent. Near-neutral black, a pointer-following
+ * spotlight (fine pointers only), wipe-reveal type on scroll.
+ * ════════════════════════════════════════════════════════════════════════════ */
+:is(.ot-campaign[data-look="stage"], .ot-campaign[data-look="stage"] [data-theme]) {
+  --ot-brand-text:    var(--cl-hot);
+  --ot-intent-brand:  var(--cl-hot);
+  --ot-intent-brand-fg: var(--ot-fg-on-brand);
+  --cl-hot:       oklch(from var(--cl-seed) 0.78 clamp(0.12, c, 0.24) h);
+  --cl-hot-hover: oklch(from var(--cl-seed) 0.70 clamp(0.12, c, 0.24) h);
+  --cl-ink:       oklch(from var(--cl-seed) 0.14 0.010 h);
+
+  --ot-canvas:   oklch(from var(--cl-seed) 0.12 0.008 h);
+  --ot-surface:  oklch(from var(--cl-seed) 0.17 0.010 h);
+  --ot-fg:       oklch(from var(--cl-seed) 0.965 0.006 h);
+  --ot-fg-muted: oklch(from var(--cl-seed) 0.72 0.020 h);
+  /* Brand slabs are a lit step above the stage floor; the hot colour is reserved for
+     actions, with a deep take on it as the resting fill of a CTA on a slab. */
+  --ot-brand:        oklch(from var(--cl-seed) 0.21 0.012 h);
+  --ot-brand-hover:  oklch(from var(--cl-seed) 0.44 clamp(0.10, c, 0.20) h);
+  --ot-fg-on-brand:  oklch(from var(--cl-seed) 0.97 0.006 h);
+  --ot-accent:       var(--cl-hot);
+  --ot-accent-hover: var(--cl-hot-hover);
+  --ot-fg-on-accent: var(--cl-ink);
+  --ot-bloom-brand:        oklch(from var(--cl-hot) l c h / 0.40);
+  --ot-bloom-brand-ring:   oklch(from var(--cl-hot) l c h / 0.30);
+  --ot-bloom-brand-faint:  oklch(from var(--cl-hot) l c h / 0.14);
+  --ot-bloom-brand-border: oklch(from var(--cl-hot) l c h / 0.18);
+  --ot-bloom-accent:        oklch(from var(--cl-hot) l c h / 0.55);
+  --ot-bloom-accent-ring:   oklch(from var(--cl-hot) l c h / 0.40);
+  --ot-bloom-accent-border: oklch(from var(--cl-hot) l c h / 0.20);
+  --ot-bloom-accent-faint:  oklch(from var(--cl-hot) l c h / 0.12);
+  --ot-btn-ghost-fg:           var(--ot-fg);
+  --ot-btn-ghost-border:       oklch(from var(--ot-fg) l c h / 0.40);
+  --ot-btn-ghost-border-hover: oklch(from var(--ot-fg) l c h / 0.75);
+  --ot-btn-ghost-bg-hover:     oklch(from var(--ot-fg) l c h / 0.08);
+}
+/* Fixed spotlight layer: position follows the pointer via two variables set by
+   CampaignSpotlight. Without a fine pointer it rests as a static overhead beam. */
+.ot-cl-spot {
+  /* Above the content with a screen blend: light ADDS to what is underneath, so the beam
+     lights the slabs and type instead of hiding behind them. Alpha is low enough that it
+     never moves text contrast. */
+  position: fixed; inset: 0; z-index: 3; pointer-events: none; mix-blend-mode: screen;
+  background:
+    radial-gradient(30rem 24rem at var(--mx, 50%) var(--my, 16%), oklch(from var(--cl-hot) l c h / 0.16), transparent 70%),
+    radial-gradient(70rem 36rem at 50% -8%, oklch(from var(--cl-hot) l c h / 0.08), transparent 70%);
+}
+.ot-cl-vignette {
+  inset: 0;
+  background: radial-gradient(120% 90% at 50% 40%, transparent 55%, oklch(from var(--ot-canvas) calc(l - 0.05) c h / 0.85) 100%);
+}
+.ot-campaign[data-look="stage"] [data-block="quote"] .ls-wrap { --ls-settled-color: var(--ot-accent); }
+.ot-campaign[data-look="stage"] [data-block="hero"] h1 {
+  font-size: clamp(2.75rem, 13cqi, 8.5rem); line-height: 0.9; letter-spacing: -0.045em; font-weight: 700; text-wrap: balance;
+}
+.ot-campaign[data-look="stage"] [data-block="stat"] ul > li { border-top: 1px solid var(--ot-accent); }
+.ot-campaign[data-look="stage"] [data-block="stat"] li p[aria-hidden="true"] { font-size: clamp(3.4rem, 9vw, 7.25rem); font-weight: 700; letter-spacing: -0.045em; line-height: 0.9; }
+.ot-campaign[data-look="stage"] [data-block="cta"] h2,
+.ot-campaign[data-look="stage"] [data-block="cta"] h1 { font-size: clamp(2.4rem, 8vw, 6.5rem); line-height: 0.92; letter-spacing: -0.04em; font-weight: 700; text-wrap: balance; }
+
+@media (min-width: 1024px) {
+  .ot-campaign[data-look="comic"] [data-block="hero"] h1 { font-size: clamp(3rem, 6.4cqi, 7rem); }
+  .ot-campaign[data-look="stage"]    [data-block="hero"] h1 { font-size: clamp(3rem, 7cqi, 8.5rem); }
+}
+
+/* Wipe-reveal on scroll (compositor-driven, no JS). Progressive enhancement: browsers
+   without scroll-driven animations simply show the content. */
+@keyframes cl-wipe { from { clip-path: inset(0 100% 0 0); opacity: 0.2; transform: translateY(1.25rem); } to { clip-path: inset(0 0 0 0); opacity: 1; transform: none; } }
+@keyframes cl-rise { from { opacity: 0; transform: translateY(2.25rem); } to { opacity: 1; transform: none; } }
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .ot-campaign[data-look="stage"][data-motion="full"] :is([data-block="stat"] h2, [data-block="cta"] h2, [data-block="quote"] blockquote) {
+      animation: cl-wipe linear both; animation-timeline: view(); animation-range: entry 0% entry 70%;
+    }
+    .ot-campaign[data-look="stage"][data-motion="full"] [data-block="stat"] ul > li {
+      animation: cl-rise linear both; animation-timeline: view(); animation-range: entry 0% entry 55%;
+    }
+  }
+}
+
+/* Stage hero: full bleed, transparent over the page atmosphere (top grid + glow band). The
+   text column keeps its inset aligned to the 90rem content measure on wide screens. */
+.ot-campaign[data-look="stage"] [data-block="hero"] > div:first-child { background: transparent; }
+@media (min-width: 1024px) {
+  .ot-campaign[data-look="stage"] [data-block="hero"] { width: 100vw; margin-inline: calc(50% - 50vw); }
+  .ot-campaign[data-look="stage"] [data-block="hero"] > div:first-child {
+    padding-inline-start: max(var(--ot-space-lg), calc((100vw - 90rem) / 2 + var(--ot-space-lg)));
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * COMIC, applied to every block. Each block family reads the same
+ * vocabulary as the hero and stat row: ink outline, hard offset shadow, flat color
+ * alternating between the brand tint (--cl-a) and the accent tint (--cl-b).
+ * ════════════════════════════════════════════════════════════════════════════ */
+.ot-campaign[data-look="comic"] [data-block="feature"] ul:not([data-ruled-grid]) li > * {
+  background: var(--cl-a); border: 2px solid var(--cl-ink); border-radius: 1.1rem; box-shadow: 5px 5px 0 var(--cl-ink);
+  --ot-fg: var(--cl-ink); --ot-fg-muted: var(--cl-ink);
+  transition: transform var(--ot-dur-base) var(--ot-ease-quick), box-shadow var(--ot-dur-base) var(--ot-ease-quick);
+}
+.ot-campaign[data-look="comic"] [data-block="feature"] ul:not([data-ruled-grid]) li:nth-child(even) > * { background: var(--cl-b); }
+.ot-campaign[data-look="comic"] [data-block="feature"] ul:not([data-ruled-grid]) li > *:hover { transform: translate(-2px, -2px); box-shadow: 7px 7px 0 var(--cl-ink); }
+
+.ot-campaign[data-look="comic"] [data-block="accordion"] .border-t[data-state][data-orientation] {
+  background: oklch(from var(--cl-seed) 0.995 0.004 h); border: 2px solid var(--cl-ink); border-radius: 1rem;
+  box-shadow: 4px 4px 0 var(--cl-ink); margin-bottom: var(--ot-space-sm); overflow: hidden;
+  --ot-fg: var(--cl-ink); --ot-fg-muted: var(--cl-ink);
+}
+.ot-campaign[data-look="comic"] [data-block="accordion"] .border-t[data-state="open"][data-orientation] { background: var(--cl-a); }
+.ot-campaign[data-look="comic"] [data-block="accordion"] .border-t[data-state] :is(h3, button) { padding-inline: var(--ot-space-md); }
+
+.ot-campaign[data-look="comic"] [data-block="callout"] > div {
+  background: var(--cl-b); border: 2px solid var(--cl-ink); border-radius: 1.1rem; box-shadow: 6px 6px 0 var(--cl-ink);
+  --ot-fg-on-brand: var(--cl-ink); --ot-intent-brand-fg: var(--cl-ink);
+}
+.ot-campaign[data-look="comic"] [data-block="callout"] > div :is(h2, h3, h4, p, a) { color: var(--cl-ink); }
+
+.ot-campaign[data-look="comic"] [data-block="image"] figure {
+  border: 3px solid var(--cl-ink); border-radius: 1.25rem; box-shadow: 8px 8px 0 var(--cl-ink); overflow: hidden; rotate: -0.8deg;
+}
+.ot-campaign[data-look="comic"] [data-block="cta"] {
+  margin: var(--ot-space-lg) var(--ot-space-md); border: 3px solid var(--cl-ink); border-radius: 1.5rem; overflow: hidden;
+  box-shadow: 8px 8px 0 var(--cl-ink);
+}
+
+.ot-campaign[data-look="comic"] [data-form-card] {
+  background: oklch(from var(--cl-seed) 0.995 0.004 h); border: 3px solid var(--cl-ink); border-radius: 1.25rem;
+  box-shadow: 8px 8px 0 var(--cl-ink);
+  --ot-fg: var(--cl-ink); --ot-fg-muted: var(--cl-ink);
+}
+.ot-campaign[data-look="comic"] [data-form-card] .ot-field {
+  background: var(--ot-canvas); border: 2px solid var(--cl-ink); border-radius: 0.75rem; color: var(--cl-ink);
+}
+.ot-campaign[data-look="comic"] [data-form-card] .ot-field:focus-visible { outline: 3px solid var(--cl-b); outline-offset: 1px; }
+.ot-campaign[data-look="comic"] :is([data-form-card] button[type="submit"], [data-form-card] [data-step-nav] button, .ot-cl-strip a[class*="bg-accent"]) {
+  border: 2px solid var(--cl-ink); border-radius: 999px; color: var(--cl-ink); background: var(--cl-a); box-shadow: 3px 3px 0 var(--cl-ink); font-weight: 800;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * NEON: dark, 80s neon signage. A night brick wall, tube-outlined display type with
+ * a glow, rounded neon frame around the viewport, every card a lit sign. Three tube
+ * colors: the seed, the site accent, and a hue-rotated third. Lightness is fixed per
+ * tube so glowing type always clears AA on the wall; opacity-only flicker.
+ * ════════════════════════════════════════════════════════════════════════════ */
+:is(.ot-campaign[data-look="neon"], .ot-campaign[data-look="neon"] [data-theme]) {
+  --cl-n1:     oklch(from var(--cl-seed) 0.80 clamp(0.16, c, 0.28) h);
+  --cl-n2:     oklch(from var(--cl-seed-2) 0.86 clamp(0.14, c, 0.26) h);
+  --cl-n3:     oklch(from var(--cl-seed) 0.78 0.24 calc(h + 160));
+  --cl-ink:    oklch(from var(--cl-seed) 0.14 0.030 h);
+  --cl-wall:   oklch(from var(--cl-seed) 0.15 0.045 h);
+  --cl-wall-2: oklch(from var(--cl-seed) 0.20 0.055 h);
+
+  --ot-canvas:   var(--cl-wall);
+  --ot-surface:  var(--cl-wall-2);
+  --ot-fg:       oklch(from var(--cl-seed) 0.97 0.012 h);
+  --ot-fg-muted: oklch(from var(--cl-seed) 0.80 0.050 h);
+  --ot-brand:        oklch(from var(--cl-seed) 0.40 clamp(0.10, c, 0.22) h);
+  --ot-brand-hover:  oklch(from var(--cl-seed) 0.48 clamp(0.12, c, 0.24) h);
+  --ot-fg-on-brand:  oklch(from var(--cl-seed) 0.985 0.008 h);
+  --ot-brand-text:    var(--cl-n1);
+  --ot-intent-brand:  var(--cl-n1);
+  --ot-intent-brand-fg: var(--cl-ink);
+  --ot-accent:       var(--cl-n2);
+  --ot-accent-hover: oklch(from var(--cl-n2) calc(l - 0.08) c h);
+  --ot-fg-on-accent: var(--cl-ink);
+  --ot-bloom-brand:        oklch(from var(--cl-n1) l c h / 0.55);
+  --ot-bloom-brand-ring:   oklch(from var(--cl-n1) l c h / 0.40);
+  --ot-bloom-brand-faint:  oklch(from var(--cl-n1) l c h / 0.18);
+  --ot-bloom-brand-border: oklch(from var(--cl-n1) l c h / 0.30);
+  --ot-bloom-accent:        oklch(from var(--cl-n2) l c h / 0.55);
+  --ot-bloom-accent-ring:   oklch(from var(--cl-n2) l c h / 0.40);
+  --ot-bloom-accent-border: oklch(from var(--cl-n2) l c h / 0.30);
+  --ot-bloom-accent-faint:  oklch(from var(--cl-n2) l c h / 0.14);
+  --ot-btn-ghost-fg:           var(--ot-fg);
+  --ot-btn-ghost-border:       var(--cl-n2);
+  --ot-btn-ghost-border-hover: var(--cl-n2);
+  --ot-btn-ghost-bg-hover:     oklch(from var(--cl-n2) l c h / 0.12);
+}
+/* A lit edge: the element sets --nc (its tube color); border + outer glow + inner glow. */
+.ot-campaign[data-look="neon"] :is(
+  [data-block="feature"] ul:not([data-ruled-grid]) li > *, [data-block="stat"] ul > li, [data-block="quote"] figure,
+  [data-block="callout"] > div, [data-block="image"] figure, [data-block="cta"],
+  [data-block="accordion"] .border-t[data-state][data-orientation], [data-form-card],
+  [data-block="hero"] > div:nth-child(2)
+) {
+  border: 2px solid var(--nc, var(--cl-n1)); border-radius: 1.25rem;
+  box-shadow: 0 0 6px oklch(from var(--nc, var(--cl-n1)) l c h / 0.85), 0 0 24px oklch(from var(--nc, var(--cl-n1)) l c h / 0.40), inset 0 0 14px oklch(from var(--nc, var(--cl-n1)) l c h / 0.20);
+  background: oklch(from var(--cl-wall) l c h / 0.82);
+}
+.ot-cl-neonwall { inset: 0; background: var(--cl-wall); }
+.ot-cl-brick {
+  inset: 0; background: oklch(from var(--cl-seed) 0.30 0.060 h / 0.55);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='112' height='56'%3E%3Cpath d='M0 1H112M0 29H112M1 0V28M57 28V56' stroke='%23000' stroke-width='2' fill='none'/%3E%3C/svg%3E") 0 0 / 112px 56px repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='112' height='56'%3E%3Cpath d='M0 1H112M0 29H112M1 0V28M57 28V56' stroke='%23000' stroke-width='2' fill='none'/%3E%3C/svg%3E") 0 0 / 112px 56px repeat;
+}
+.ot-cl-neonglow {
+  inset: 0 0 auto 0; height: 60rem;
+  background:
+    radial-gradient(48rem 30rem at 0% 0%, oklch(from var(--cl-n3) l c h / 0.20), transparent 70%),
+    radial-gradient(48rem 30rem at 100% 12%, oklch(from var(--cl-n1) l c h / 0.18), transparent 70%);
+}
+/* The frame is the page edge: a wall-colored spread covers everything outside it, so the sticky strip,
+ * form and content all sit inside one rounded perimeter. --cl-frame-top lets a host with its own chrome
+ * above the page (the demo look switcher) push the top edge down. */
+.ot-cl-neonframe {
+  position: fixed !important; inset: var(--cl-frame-top, 10px) 10px 10px; z-index: 60; pointer-events: none;
+  border: 2px solid var(--cl-n1); border-radius: 1.75rem;
+  box-shadow: 0 0 6px var(--cl-n1), 0 0 26px oklch(from var(--cl-n1) l c h / 0.5), inset 0 0 12px oklch(from var(--cl-n1) l c h / 0.4), 0 0 0 100vmax var(--cl-wall);
+}
+@media (max-width: 767px) { .ot-cl-neonframe { inset: var(--cl-frame-top, 5px) 5px 5px; border-radius: 1.1rem; } }
+
+/* Strip: inset inside the frame with matching rounded top corners so the neon edge runs unbroken around the top. */
+.ot-campaign[data-look="neon"] .ot-cl-strip {
+  top: calc(var(--cl-frame-top, 10px) + 2px); margin: 12px 12px 0; border-radius: calc(1.75rem - 2px) calc(1.75rem - 2px) 0 0;
+}
+@media (max-width: 767px) {
+  .ot-campaign[data-look="neon"] .ot-cl-strip { top: calc(var(--cl-frame-top, 5px) + 2px); margin: 7px 7px 0; border-radius: calc(1.1rem - 2px) calc(1.1rem - 2px) 0 0; }
+}
+.ot-campaign[data-look="neon"] .ot-cl-strip { background: oklch(from var(--cl-wall) l c h / 0.94); border-bottom: 1px solid oklch(from var(--cl-n1) l c h / 0.55); box-shadow: 0 6px 22px oklch(from var(--cl-n1) l c h / 0.18); }
+.ot-campaign[data-look="neon"] .ot-campaign-footer { background: oklch(from var(--cl-wall) l c h / 0.94); }
+.ot-campaign[data-look="neon"] .ot-cl-form { background: transparent; }
+/* Tube headings: Orbitron, white-hot core with a tube-colored bloom (the --ot-font-neon header style).
+ * font-synthesis-weight:none keeps the single 700 cut from being faux-bolded. */
+.ot-campaign[data-look="neon"] :is([data-block] h1, [data-block] h2, .ot-cl-form h2) {
+  font-family: var(--ot-font-neon); font-weight: 700; font-synthesis-weight: none; letter-spacing: 0.03em; text-wrap: balance;
+  color: var(--ot-fg);
+  text-shadow:
+    0 0 0.04em oklch(from var(--ot-fg) l c h / 0.95),
+    0 0 0.12em oklch(from var(--cl-n1) l c h / 0.95),
+    0 0 0.30em oklch(from var(--cl-n1) l c h / 0.80),
+    0 0 0.60em oklch(from var(--cl-n1) l c h / 0.55),
+    0 0 1.10em oklch(from var(--cl-n1) l c h / 0.35);
+}
+.ot-campaign[data-look="neon"] .ot-cl-form h2 { text-shadow: 0 0 0.04em oklch(from var(--ot-fg) l c h / 0.95), 0 0 0.12em oklch(from var(--cl-n2) l c h / 0.95), 0 0 0.30em oklch(from var(--cl-n2) l c h / 0.8), 0 0 0.60em oklch(from var(--cl-n2) l c h / 0.5); }
+.ot-campaign[data-look="neon"] [data-block="hero"][class*="lg:flex-row"] > div:first-child { background: transparent; }
+.ot-campaign[data-look="neon"] [data-block="hero"][class*="lg:flex-row"] > div:first-child > div > p:first-child { color: var(--cl-n2); text-shadow: 0 0 10px oklch(from var(--cl-n2) l c h / 0.6); }
+.ot-campaign[data-look="neon"] [data-block="hero"][class*="lg:flex-row"] > div:nth-child(2) { --nc: var(--cl-n3); margin: var(--ot-space-md); overflow: hidden; }
+
+/* Hero lettering: the Orbitron tube style above at display scale. Orbitron is wide, so the size
+ * steps down from the old Poppins values to keep the same line count. */
+.ot-campaign[data-look="neon"] [data-block="hero"] h1 {
+  font-size: clamp(1.9rem, 7cqi, 4.25rem); line-height: 1.08; letter-spacing: 0.02em; text-transform: uppercase;
+}
+@media (min-width: 1024px) { .ot-campaign[data-look="neon"] [data-block="hero"] h1 { font-size: clamp(2.2rem, 3.9cqi, 4.25rem); } }
+.ot-campaign[data-look="neon"] [data-block="cta"] h2,
+.ot-campaign[data-look="neon"] [data-block="cta"] h1 { text-transform: uppercase; letter-spacing: 0.02em; text-shadow: 0 0 0.04em oklch(from var(--ot-fg) l c h / 0.95), 0 0 0.12em oklch(from var(--cl-n3) l c h / 0.95), 0 0 0.30em oklch(from var(--cl-n3) l c h / 0.8), 0 0 0.60em oklch(from var(--cl-n3) l c h / 0.5); }
+.ot-campaign[data-look="neon"] [data-block="cta"] { --nc: var(--cl-n3); margin: var(--ot-space-lg) var(--ot-space-md); overflow: hidden; }
+@keyframes cl-flicker { 0%, 18%, 22%, 62%, 66%, 100% { opacity: 1; } 20% { opacity: 0.82; } 64% { opacity: 0.88; } }
+@media (prefers-reduced-motion: no-preference) {
+  .ot-campaign[data-look="neon"]:not([data-motion="still"]) [data-block="hero"] h1 { animation: cl-flicker calc(8s * var(--cl-dur)) linear infinite; }
+}
+
+/* Lit cards: alternate tubes */
+.ot-campaign[data-look="neon"] [data-block="feature"] ul:not([data-ruled-grid]) li:nth-child(3n+1) > *,
+.ot-campaign[data-look="neon"] [data-block="stat"] ul > li:nth-child(3n+1) { --nc: var(--cl-n1); }
+.ot-campaign[data-look="neon"] [data-block="feature"] ul:not([data-ruled-grid]) li:nth-child(3n+2) > *,
+.ot-campaign[data-look="neon"] [data-block="stat"] ul > li:nth-child(3n+2) { --nc: var(--cl-n2); }
+.ot-campaign[data-look="neon"] [data-block="feature"] ul:not([data-ruled-grid]) li:nth-child(3n) > *,
+.ot-campaign[data-look="neon"] [data-block="stat"] ul > li:nth-child(3n) { --nc: var(--cl-n3); }
+.ot-campaign[data-look="neon"] [data-block="stat"] ul > li > span[aria-hidden="true"] { display: none; }
+.ot-campaign[data-look="neon"] [data-block="stat"] li p[aria-hidden="true"] {
+  color: var(--nc); font-weight: 800; letter-spacing: -0.02em;
+  text-shadow: 0 0 6px oklch(from var(--nc) l c h / 0.9), 0 0 22px oklch(from var(--nc) l c h / 0.55);
+}
+.ot-campaign[data-look="neon"] [data-block="quote"] figure { --nc: var(--cl-n3); padding: clamp(1.25rem, 3vw, 2.25rem); }
+.ot-campaign[data-look="neon"] [data-block="quote"] .ls-wrap { --ls-settled-color: var(--cl-n2); }
+.ot-campaign[data-look="neon"] [data-block="callout"] > div { --nc: var(--cl-n2); --ot-fg-on-brand: var(--ot-fg); --ot-intent-brand-fg: var(--ot-fg); }
+.ot-campaign[data-look="neon"] [data-block="callout"] > div a { color: var(--cl-n2); }
+.ot-campaign[data-look="neon"] [data-block="image"] figure { --nc: var(--cl-n1); overflow: hidden; }
+.ot-campaign[data-look="neon"] [data-block="accordion"] .border-t[data-state][data-orientation] { --nc: var(--cl-n1); margin-bottom: var(--ot-space-sm); overflow: hidden; }
+.ot-campaign[data-look="neon"] [data-block="accordion"] .border-t[data-state="open"][data-orientation] { --nc: var(--cl-n2); }
+.ot-campaign[data-look="neon"] [data-block="accordion"] .border-t[data-state] :is(h3, button) { padding-inline: var(--ot-space-md); }
+.ot-campaign[data-look="neon"] [data-form-card] { --nc: var(--cl-n1); background: oklch(from var(--cl-wall-2) l c h / 0.92); }
+.ot-campaign[data-look="neon"] .ot-field {
+  background: oklch(from var(--cl-wall) l c h / 0.9); color: var(--ot-fg); border: 2px solid oklch(from var(--cl-n1) l c h / 0.5); border-radius: 0.75rem;
+}
+.ot-campaign[data-look="neon"] .ot-field:focus-visible { border-color: var(--cl-n2); box-shadow: 0 0 12px oklch(from var(--cl-n2) l c h / 0.6); outline: none; }
+
+/* Neon pills: filled primary, outlined secondary */
+.ot-campaign[data-look="neon"] :is([data-block="hero"] > div:first-child a, [data-block="cta"] a, [data-form-card] button[type="submit"], [data-form-card] [data-step-nav] button, .ot-cl-strip a[class*="bg-accent"]) {
+  border: 2px solid var(--cl-n1); border-radius: 999px; font-weight: 800; transform: none;
+  background: var(--cl-n1); color: var(--cl-ink);
+  box-shadow: 0 0 8px oklch(from var(--cl-n1) l c h / 0.8), 0 0 26px oklch(from var(--cl-n1) l c h / 0.4);
+}
+.ot-campaign[data-look="neon"] :is([data-block="hero"] > div:first-child a:nth-of-type(2), [data-form-card] [data-step-nav] button:first-child, .ot-cl-strip a[class*="bg-accent"]) {
+  background: transparent; color: var(--cl-n2); border-color: var(--cl-n2);
+  box-shadow: 0 0 8px oklch(from var(--cl-n2) l c h / 0.7), inset 0 0 8px oklch(from var(--cl-n2) l c h / 0.3);
+}
+.ot-campaign[data-look="neon"] [data-block="cta"] a { background: var(--cl-n3); border-color: var(--cl-n3); box-shadow: 0 0 8px oklch(from var(--cl-n3) l c h / 0.8), 0 0 26px oklch(from var(--cl-n3) l c h / 0.4); }
+.ot-campaign[data-look="neon"] :is([data-block="hero"] > div:first-child a, [data-block="cta"] a, [data-form-card] button[type="submit"], [data-form-card] [data-step-nav] button, .ot-cl-strip a[class*="bg-accent"]):hover {
+  background: var(--cl-n2); color: var(--cl-ink); border-color: var(--cl-n2); transform: none;
+  box-shadow: 0 0 12px oklch(from var(--cl-n2) l c h / 0.9), 0 0 36px oklch(from var(--cl-n2) l c h / 0.5);
+}
+
+/* Accordion, open state: question stays full-strength, answer aligns with the question. */
+.ot-campaign[data-look="comic"] [data-block="accordion"] .border-t[data-state] :is(h3, button, h3 *, button *):not(svg):not(svg *) { color: var(--cl-ink); opacity: 1; }
+.ot-campaign[data-look="comic"] [data-block="accordion"] .border-t[data-state] [role="region"] { padding-inline: calc(var(--ot-space-md) + 0.75rem); padding-bottom: var(--ot-space-sm); color: var(--cl-ink); }
+.ot-campaign[data-look="neon"] [data-block="accordion"] .border-t[data-state] [role="region"] { padding-inline: var(--ot-space-md); padding-bottom: var(--ot-space-sm); }
+
+/* Neon legibility: stat gaps, open accordion question, form placeholders. */
+.ot-campaign[data-look="neon"] [data-block="stat"] ul,
+.ot-campaign[data-look="comic"] [data-block="stat"] ul { gap: var(--ot-space-md); }
+.ot-campaign[data-look="neon"] [data-block="accordion"] .border-t[data-state] :is(h3, button, h3 *, button *):not(svg):not(svg *) { color: var(--ot-fg); opacity: 1; }
+.ot-campaign[data-look="neon"] [data-block="accordion"] .border-t[data-state] svg { color: var(--nc); }
+.ot-campaign[data-look="neon"] [data-block="accordion"] .border-t[data-state] [role="region"] { padding-inline: calc(var(--ot-space-md) + 0.75rem); color: var(--ot-fg-muted); }
+.ot-campaign[data-look="neon"] .ot-field::placeholder { color: var(--ot-fg-muted); opacity: 0.85; }
+.ot-campaign[data-look="comic"] .ot-field::placeholder { color: var(--cl-ink); opacity: 0.6; }
+
+/* Shared .btn-signal links (Image, Video and similar blocks) follow each look's button style. */
+.ot-campaign[data-look="neon"] .btn-signal {
+  border: 2px solid var(--cl-n1); border-radius: 999px; font-weight: 800; background: var(--cl-n1); color: var(--cl-ink);
+  box-shadow: 0 0 8px oklch(from var(--cl-n1) l c h / 0.8), 0 0 26px oklch(from var(--cl-n1) l c h / 0.4);
+}
+.ot-campaign[data-look="neon"] .btn-signal:hover {
+  background: var(--cl-n2); border-color: var(--cl-n2); color: var(--cl-ink);
+  box-shadow: 0 0 12px oklch(from var(--cl-n2) l c h / 0.9), 0 0 36px oklch(from var(--cl-n2) l c h / 0.5);
+}
+.ot-campaign[data-look="comic"] .btn-signal {
+  border: 2px solid var(--cl-ink); border-radius: 999px; font-weight: 800; background: var(--cl-a); color: var(--cl-ink);
+  box-shadow: 4px 4px 0 var(--cl-ink);
+  transition: transform var(--ot-dur-fast, 150ms) var(--ot-ease-quick), box-shadow var(--ot-dur-fast, 150ms) var(--ot-ease-quick);
+}
+.ot-campaign[data-look="comic"] .btn-signal:hover { background: var(--cl-b); color: var(--cl-ink); transform: translate(-2px, -2px); box-shadow: 6px 6px 0 var(--cl-ink); }
+
+/* Form placeholders: the form's default is fg at 25%; every dark look needs a readable one. */
+.ot-campaign[data-look="stage"] .ot-field::placeholder { color: var(--ot-fg-muted); opacity: 0.85; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * BLUEPRINT: light, Restrained. A drafting sheet: fine grid paper, hairline linework,
+ * crop-marked frames, mono annotations, a hand-drawn highlighter on eyebrows and square
+ * controls. One ink hue from the seed, one highlighter from the accent. Ink and paper sit at fixed lightness, so contrast is
+ * constant for any brand color. Static by design: the motion setting has no effect here.
+ * ════════════════════════════════════════════════════════════════════════════ */
+:is(.ot-campaign[data-look="blueprint"], .ot-campaign[data-look="blueprint"] [data-theme]) {
+  --cl-ink:   oklch(from var(--cl-seed) 0.30 clamp(0.05, c, 0.13) h);
+  --cl-ink-2: oklch(from var(--cl-seed) 0.40 clamp(0.05, c, 0.12) h);
+  --cl-paper: oklch(from var(--cl-seed) 0.975 0.014 h);
+  --cl-sheet: oklch(from var(--cl-seed) 0.992 0.006 h);
+  --cl-mark:  oklch(from var(--cl-seed-2) 0.84 clamp(0.12, c, 0.20) h);
+  --cl-line:  1.5px solid var(--cl-ink);
+  --cl-mono:  var(--ot-font-mono, ui-monospace, monospace);
+
+  --ot-canvas:   var(--cl-paper);
+  --ot-surface:  var(--cl-sheet);
+  --ot-fg:       oklch(from var(--cl-seed) 0.22 0.030 h);
+  --ot-fg-muted: var(--cl-ink-2);
+  --ot-brand:        oklch(from var(--cl-seed) 0.36 clamp(0.07, c, 0.15) h);
+  --ot-brand-hover:  oklch(from var(--cl-seed) 0.30 clamp(0.07, c, 0.15) h);
+  --ot-fg-on-brand:  oklch(from var(--cl-seed) 0.985 0.008 h);
+  --ot-brand-text:    var(--cl-ink);
+  --ot-intent-brand:  var(--cl-ink);
+  --ot-intent-brand-fg: var(--ot-fg-on-brand);
+  --ot-accent:       var(--cl-mark);
+  --ot-accent-hover: oklch(from var(--cl-mark) calc(l - 0.06) c h);
+  --ot-fg-on-accent: var(--cl-ink);
+  --ot-bloom-brand:        oklch(from var(--cl-ink) l c h / 0.18);
+  --ot-bloom-brand-ring:   oklch(from var(--cl-ink) l c h / 0.18);
+  --ot-bloom-brand-faint:  oklch(from var(--cl-ink) l c h / 0.08);
+  --ot-bloom-brand-border: oklch(from var(--cl-ink) l c h / 0.20);
+  --ot-bloom-accent:        oklch(from var(--cl-mark) l c h / 0.40);
+  --ot-bloom-accent-ring:   oklch(from var(--cl-mark) l c h / 0.30);
+  --ot-bloom-accent-border: oklch(from var(--cl-mark) l c h / 0.30);
+  --ot-bloom-accent-faint:  oklch(from var(--cl-mark) l c h / 0.14);
+  --ot-btn-ghost-fg:           var(--cl-ink);
+  --ot-btn-ghost-border:       var(--cl-ink);
+  --ot-btn-ghost-border-hover: var(--cl-ink);
+  --ot-btn-ghost-bg-hover:     oklch(from var(--cl-ink) l c h / 0.07);
+}
+.ot-cl-bpgrid {
+  inset: 0;
+  background-image:
+    linear-gradient(oklch(from var(--cl-ink) l c h / 0.11) 1px, transparent 1px),
+    linear-gradient(90deg, oklch(from var(--cl-ink) l c h / 0.11) 1px, transparent 1px),
+    linear-gradient(oklch(from var(--cl-ink) l c h / 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, oklch(from var(--cl-ink) l c h / 0.05) 1px, transparent 1px);
+  background-size: 96px 96px, 96px 96px, 16px 16px, 16px 16px;
+}
+.ot-campaign[data-look="blueprint"] .ot-cl-strip { border-bottom: var(--cl-line); }
+.ot-campaign[data-look="blueprint"] .ot-campaign-footer { background: var(--cl-sheet); border-top: var(--cl-line); }
+.ot-campaign[data-look="blueprint"] .ot-cl-form { background: transparent; }
+.ot-campaign[data-look="blueprint"] .ot-cl-form h2 { color: var(--cl-ink); font-weight: 800; letter-spacing: -0.02em; }
+
+.ot-campaign[data-look="blueprint"] [data-block] { position: relative; }
+
+/* Hero */
+.ot-campaign[data-look="blueprint"] [data-block="hero"] { padding-bottom: 2.25rem; }
+.ot-campaign[data-look="blueprint"] [data-block="hero"]::after {
+  content: "SCALE 1:1"; position: absolute; z-index: 3; left: var(--ot-space-md); right: var(--ot-space-md); bottom: 0.6rem;
+  padding-top: 0.45rem; border-top: 1px dashed oklch(from var(--cl-ink) l c h / 0.45);
+  font: 500 0.64rem/1 var(--cl-mono); letter-spacing: 0.16em; text-align: right; color: var(--cl-ink-2);
+}
+.ot-campaign[data-look="blueprint"] [data-block="hero"][class*="lg:flex-row"] > div:first-child { background: transparent; --ot-fg-on-brand: var(--ot-fg); }
+.ot-campaign[data-look="blueprint"] [data-block="hero"] h1 {
+  font-size: clamp(2.5rem, 9.5cqi, 6rem); line-height: 0.97; letter-spacing: -0.03em; font-weight: 800; text-wrap: balance; color: var(--ot-fg);
+}
+@media (min-width: 1024px) { .ot-campaign[data-look="blueprint"] [data-block="hero"] h1 { font-size: clamp(2.6rem, 4.3cqi, 5rem); } }
+.ot-campaign[data-look="blueprint"] [data-block="hero"] :is(h1, p) { color: var(--ot-fg); }
+.ot-campaign[data-look="blueprint"] [data-block="hero"][class*="lg:flex-row"] > div:nth-child(2) {
+  margin: var(--ot-space-lg) var(--ot-space-md) var(--ot-space-md); border: var(--cl-line); background: var(--cl-sheet);
+  box-shadow: 10px 10px 0 oklch(from var(--cl-ink) l c h / 0.14);
+}
+
+/* Framed items: hairline border, crop marks just outside each corner */
+.ot-campaign[data-look="blueprint"] :is([data-block="feature"] ul:not([data-ruled-grid]) li > *, [data-block="stat"] ul > li, [data-block="quote"] figure, [data-block="image"] figure, [data-form-card]) {
+  position: relative; border: var(--cl-line); border-radius: 0; background: var(--cl-sheet); box-shadow: none;
+  --ot-fg-muted: var(--cl-ink-2);
+}
+.ot-campaign[data-look="blueprint"] :is([data-block="feature"] ul:not([data-ruled-grid]) li > *, [data-block="stat"] ul > li, [data-block="quote"] figure, [data-block="image"] figure, [data-form-card])::after {
+  content: ""; position: absolute; inset: -7px; pointer-events: none; z-index: 2;
+  background:
+    linear-gradient(var(--cl-ink), var(--cl-ink)) 0 0 / 12px 1.5px no-repeat,
+    linear-gradient(var(--cl-ink), var(--cl-ink)) 0 0 / 1.5px 12px no-repeat,
+    linear-gradient(var(--cl-ink), var(--cl-ink)) 100% 0 / 12px 1.5px no-repeat,
+    linear-gradient(var(--cl-ink), var(--cl-ink)) 100% 0 / 1.5px 12px no-repeat,
+    linear-gradient(var(--cl-ink), var(--cl-ink)) 0 100% / 12px 1.5px no-repeat,
+    linear-gradient(var(--cl-ink), var(--cl-ink)) 0 100% / 1.5px 12px no-repeat,
+    linear-gradient(var(--cl-ink), var(--cl-ink)) 100% 100% / 12px 1.5px no-repeat,
+    linear-gradient(var(--cl-ink), var(--cl-ink)) 100% 100% / 1.5px 12px no-repeat;
+}
+.ot-campaign[data-look="blueprint"] [data-block="stat"] ul { gap: var(--ot-space-lg); }
+.ot-campaign[data-look="blueprint"] [data-block="stat"] li p[aria-hidden="true"] { color: var(--cl-ink); font-weight: 300; font-variant-numeric: tabular-nums; }
+.ot-campaign[data-look="blueprint"] [data-block="quote"] figure { padding: clamp(1.25rem, 3vw, 2.25rem); }
+.ot-campaign[data-look="blueprint"] [data-block="image"] figure { box-shadow: 10px 10px 0 oklch(from var(--cl-ink) l c h / 0.14); }
+.ot-campaign[data-look="blueprint"] [data-block="image"] figure::after { content: none; }
+.ot-campaign[data-look="blueprint"] [data-block="quote"] .ls-wrap { --ls-settled-color: var(--cl-ink); }
+
+/* Callout: a hatched note with a tab */
+.ot-campaign[data-look="blueprint"] [data-block="callout"] > div {
+  position: relative; border: 1.5px dashed var(--cl-ink); border-radius: 0; margin-top: var(--ot-space-md);
+  background: repeating-linear-gradient(135deg, oklch(from var(--cl-ink) l c h / 0.06) 0 1px, transparent 1px 9px), var(--cl-sheet);
+  --ot-fg-on-brand: var(--ot-fg); --ot-intent-brand-fg: var(--ot-fg);
+}
+.ot-campaign[data-look="blueprint"] [data-block="callout"] > div::before {
+  content: "NOTE"; position: absolute; top: -0.75rem; left: var(--ot-space-md); padding: 0.3rem 0.6rem;
+  background: var(--cl-ink); color: var(--cl-paper); font: 600 0.66rem/1 var(--cl-mono); letter-spacing: 0.16em;
+}
+.ot-campaign[data-look="blueprint"] [data-block="callout"] > div :is(h2, h3, h4, p, a) { color: var(--ot-fg); }
+
+/* Accordion: ruled rows with a mono index */
+.ot-campaign[data-look="blueprint"] [data-block="accordion"] { counter-reset: acc; }
+.ot-campaign[data-look="blueprint"] [data-block="accordion"] .border-t[data-state][data-orientation] {
+  position: relative; counter-increment: acc; border: 0; border-top: var(--cl-line); border-radius: 0; background: transparent;
+}
+.ot-campaign[data-look="blueprint"] [data-block="accordion"] .border-t[data-state][data-orientation]:last-child { border-bottom: var(--cl-line); }
+.ot-campaign[data-look="blueprint"] [data-block="accordion"] .border-t[data-state][data-orientation]::before {
+  content: counter(acc, decimal-leading-zero); position: absolute; left: var(--ot-space-sm); top: 1.35rem;
+  font: 600 0.7rem/1 var(--cl-mono); letter-spacing: 0.1em; color: var(--cl-ink-2);
+}
+.ot-campaign[data-look="blueprint"] [data-block="accordion"] .border-t[data-state="open"][data-orientation] { background: var(--cl-sheet); }
+.ot-campaign[data-look="blueprint"] [data-block="accordion"] .border-t[data-state] :is(h3, button) { padding-inline-start: 3rem; }
+.ot-campaign[data-look="blueprint"] [data-block="accordion"] .border-t[data-state] [role="region"] { padding-inline: 3rem var(--ot-space-md); padding-bottom: var(--ot-space-sm); }
+
+/* Banner */
+.ot-campaign[data-look="blueprint"] [data-block="cta"] { margin: var(--ot-space-lg) var(--ot-space-md); border: var(--cl-line); box-shadow: 10px 10px 0 oklch(from var(--cl-ink) l c h / 0.14); }
+.ot-campaign[data-look="blueprint"] [data-block="cta"] h2,
+.ot-campaign[data-look="blueprint"] [data-block="cta"] h1 { letter-spacing: -0.03em; font-weight: 800; }
+
+/* Fields */
+.ot-campaign[data-look="blueprint"] .ot-field { background: var(--cl-paper); color: var(--ot-fg); border: var(--cl-line); border-radius: 0; }
+.ot-campaign[data-look="blueprint"] .ot-field::placeholder { color: var(--cl-ink-2); opacity: 0.8; }
+.ot-campaign[data-look="blueprint"] .ot-field:focus-visible { outline: 3px solid var(--cl-mark); outline-offset: 2px; }
+
+/* Square controls: solid ink primary, outlined secondary, highlighter on hover */
+.ot-campaign[data-look="blueprint"] :is([data-block="hero"] > div:first-child a, [data-block="cta"] a, [data-form-card] button[type="submit"], [data-form-card] [data-step-nav] button, .ot-cl-strip a[class*="bg-accent"], .btn-signal) {
+  background: var(--cl-mark); color: var(--cl-ink); border: var(--cl-line); border-radius: 0; font-weight: 700; transform: none;
+  box-shadow: 4px 4px 0 var(--cl-ink);
+  transition: transform var(--ot-dur-fast, 150ms) var(--ot-ease-quick), box-shadow var(--ot-dur-fast, 150ms) var(--ot-ease-quick), background-color var(--ot-dur-fast, 150ms) var(--ot-ease-quick);
+}
+.ot-campaign[data-look="blueprint"] :is([data-block="hero"] > div:first-child a:nth-of-type(2), [data-form-card] [data-step-nav] button:first-child) {
+  background: transparent; color: var(--cl-ink); box-shadow: none;
+}
+.ot-campaign[data-look="blueprint"] :is([data-block="hero"] > div:first-child a, [data-block="cta"] a, [data-form-card] button[type="submit"], [data-form-card] [data-step-nav] button, .ot-cl-strip a[class*="bg-accent"], .btn-signal):hover {
+  background: var(--ot-brand); color: var(--cl-paper); transform: translate(-2px, -2px); box-shadow: 6px 6px 0 var(--cl-ink);
+}
+.ot-campaign[data-look="blueprint"] [data-block="cta"] a:hover { background: var(--cl-paper); color: var(--cl-ink); }
+.ot-campaign[data-look="blueprint"] :is(a, button):focus-visible { outline: 3px solid var(--cl-mark); outline-offset: 2px; }
+
+
+/* Blueprint hero: wider picture. The text column narrows so the image can run landscape. */
+@media (min-width: 1024px) {
+  .ot-campaign[data-look="blueprint"] [data-block="hero"][class*="lg:flex-row"] > div:first-child { width: 46%; }
+  .ot-campaign[data-look="blueprint"] [data-block="hero"][class*="lg:flex-row"] > div:nth-child(2) { flex: 1 1 0; align-self: center; aspect-ratio: 16 / 11; min-height: 0; }
+}
+
+/* Eyebrows: a hand-run highlighter on graph paper. Multiply blend so the grid shows
+   through the ink; ragged ends, a slight tilt and a doubled edge read as marker. */
+.ot-campaign[data-look="blueprint"] :is([data-block] :is(p, span).text-label.text-brand, [data-block="text"] div > p.text-label:first-child, [data-block="hero"] > div:first-child > div > p:first-child) {
+  display: block; width: fit-content; font-family: var(--cl-mono); font-weight: 600; color: var(--cl-ink);
+  padding: 0.2em 0.7em 0.16em 0.55em; margin-inline-start: -0.55em;
+  border-radius: 0.3em 0.7em 0.4em 0.8em / 0.9em 0.4em 0.8em 0.35em; rotate: -1deg;
+  background: linear-gradient(98deg, transparent 0, oklch(from var(--cl-mark) l c h / 0.92) 0.55em, oklch(from var(--cl-mark) l c h / 0.92) calc(100% - 0.9em), transparent 100%);
+  box-shadow: 0.1em 0.16em 0 -0.03em oklch(from var(--cl-mark) l c h / 0.5);
+  mix-blend-mode: multiply;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * Mobile polish (all looks)
+ * ════════════════════════════════════════════════════════════════════════════ */
+/* Touch targets: 44px minimum for the strip picker, shared links and the form's info icon. */
+.ot-cl-strip button { min-height: 2.75rem; }
+.ot-campaign .btn-signal { min-height: 2.75rem; display: inline-flex; align-items: center; }
+.ot-campaign [data-block="callout"] a { min-height: 2.75rem; }
+.ot-campaign [data-form-card] button[class*="text-fg-muted/50"] { position: relative; }
+.ot-campaign [data-form-card] button[class*="text-fg-muted/50"]::after { content: ""; position: absolute; inset: -16px; }
+
+@media (max-width: 479px) {
+  /* Hero actions: two equal full-width buttons instead of two ragged ones. */
+  .ot-campaign [data-block="hero"] .flex-wrap { flex-direction: column; align-items: stretch; }
+  .ot-campaign [data-block="hero"] .flex-wrap a { text-align: center; }
+}
+@media (max-width: 639px) {
+  /* Form: stop the double inset (section wrapper plus card) squeezing the fields. */
+  .ot-cl-form [class*="vb:section"] > div { padding-inline: 0; }
+  .ot-cl-form [data-form-card] { padding-inline: var(--ot-space-md); }
+}
+
+/* Sticky mobile CTA follows each look's button language. */
+.ot-campaign[data-look="blueprint"] .ot-cl-mobilebar { background: var(--cl-sheet); border-top: var(--cl-line); }
+.ot-campaign[data-look="blueprint"] .ot-cl-mobilebar a { background: var(--cl-mark); color: var(--cl-ink); border: var(--cl-line); border-radius: 0; font-weight: 700; box-shadow: 4px 4px 0 var(--cl-ink); }
+.ot-campaign[data-look="neon"] .ot-cl-mobilebar { background: oklch(from var(--cl-wall) l c h / 0.96); border-top: 1px solid oklch(from var(--cl-n1) l c h / 0.6); box-shadow: 0 -8px 26px oklch(from var(--cl-n1) l c h / 0.18); }
+.ot-campaign[data-look="neon"] .ot-cl-mobilebar a { background: var(--cl-n1); color: var(--cl-ink); border: 2px solid var(--cl-n1); border-radius: 999px; font-weight: 800; box-shadow: 0 0 8px oklch(from var(--cl-n1) l c h / 0.8), 0 0 26px oklch(from var(--cl-n1) l c h / 0.4); }
+.ot-campaign[data-look="comic"] .ot-cl-mobilebar { border-top: 2px solid var(--cl-ink); }
+.ot-campaign[data-look="comic"] .ot-cl-mobilebar a { background: var(--cl-a); color: var(--cl-ink); border: 2px solid var(--cl-ink); border-radius: 999px; font-weight: 800; box-shadow: 3px 3px 0 var(--cl-ink); }
+
+/* Neon stat numerals: the count-up wrapper clips overflow, which cut the glow into a box. */
+.ot-campaign[data-look="neon"] [data-block="stat"] li > div { overflow: visible; }
+
+/* Form section heading weight follows the rest of the look. */
+.ot-campaign[data-look="comic"] .ot-cl-form h2 { font-weight: 800; letter-spacing: -0.02em; color: var(--cl-ink); }
+.ot-campaign[data-look="stage"] .ot-cl-form h2 { font-weight: 600; }
+
+/* Blueprint's hero text column is 46% wide, so the two hero buttons need tighter padding to share a row at laptop-small widths. */
+@media (min-width: 1024px) {
+  .ot-campaign[data-look="blueprint"] [data-block="hero"][class*="lg:flex-row"] > div:first-child .flex-wrap a { padding-inline: 1.75rem; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * Variant hardening: the looks must hold for every display setting a block offers.
+ * Rule of thumb: whatever surface a look paints on a card, the card's "on brand" text
+ * token is re-pointed at a color that reads on that surface.
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+/* Light looks paint light cards even inside brand sections, where blocks emit on-brand
+   (light) text classes. Re-point the on-brand token inside the cards. */
+.ot-campaign[data-look="blueprint"] :is([data-block="feature"] ul:not([data-ruled-grid]) li > *, [data-block="stat"] ul > li, [data-block="quote"] figure, [data-block="image"] figure),
+.ot-campaign[data-look="comic"]     :is([data-block="feature"] ul:not([data-ruled-grid]) li > *, [data-block="stat"] ul > li, [data-block="quote"] figure) {
+  --ot-fg-on-brand: var(--ot-fg);
+  --ot-brand-text: var(--ot-fg);
+}
+.ot-campaign[data-look="blueprint"] [data-block="stat"] ul > li :is(.bg-glass, [class*="stat-"]) { background: transparent; box-shadow: none; border: 0; }
+
+/* Spotlight, overlap and diagonal heroes keep their own surfaces: on a brand panel the
+   text stays on-brand (light); the Blueprint/Comic ink text applies to the split hero only. */
+.ot-campaign:is([data-look="blueprint"], [data-look="comic"]) [data-block="hero"]:not([class*="lg:flex-row"]) .bg-brand-fill :is(p, h1) { color: var(--ot-fg-on-brand); }
+.ot-campaign[data-look="blueprint"] [data-block="hero"]:not([class*="lg:flex-row"]) .bg-brand-fill h1 { color: var(--ot-fg-on-brand); }
+.ot-campaign[data-look="blueprint"] [data-block="hero"]:not([class*="lg:flex-row"]) .bg-brand-fill a.inline-block:not(:first-of-type) { color: var(--ot-fg-on-brand); border-color: var(--ot-fg-on-brand); }
+.ot-campaign[data-look="blueprint"] [data-block="hero"]:not([class*="lg:flex-row"]) .bg-brand-fill a.inline-block:not(:first-of-type):hover { color: var(--cl-ink); }
+
+/* Callout bar variant (own hook): a full-width band; text and link follow the band. */
+.ot-campaign[data-look="blueprint"] [data-block="callout-bar"] > div { border-radius: 0; border-block: var(--cl-line); }
+.ot-campaign[data-look="comic"]     [data-block="callout-bar"] > div { border-radius: 0; border-block: 2px solid var(--cl-ink); background: var(--cl-b); }
+.ot-campaign[data-look="comic"]     [data-block="callout-bar"] :is(p, a, div) { color: var(--cl-ink); }
+.ot-campaign:is([data-look="neon"], [data-look="stage"]) [data-block="callout-bar"] > div { border-radius: 0; background: oklch(from var(--cl-wall, var(--ot-canvas)) l c h / 0.9); border-block: 1px solid var(--cl-n1, var(--ot-accent)); }
+.ot-campaign:is([data-look="neon"], [data-look="stage"]) [data-block="callout-bar"] :is(p, a, div) { color: var(--ot-fg); }
+
+/* Banners: the compact size must stay compact. Display-size type is capped, and glass or
+   accent banners on dark looks read in the look's foreground, not ink on a photo. */
+.ot-campaign:is([data-look="stage"], [data-look="neon"], [data-look="comic"]) [data-block="cta"] :is(h1, h2) { font-size: clamp(2.2rem, 5.5vw, 4.5rem); }
+.ot-campaign:is([data-look="stage"], [data-look="neon"]) [data-block="cta"] .banner-heading.text-fg-on-accent,
+.ot-campaign:is([data-look="stage"], [data-look="neon"]) [data-block="cta"] .banner-body p { color: var(--ot-fg); }

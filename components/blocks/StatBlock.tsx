@@ -232,6 +232,7 @@ export default function StatBlock({
       className={outerClass}
       data-theme={isDarkSurface ? 'dark' : undefined}
       aria-label="Key metrics"
+      data-block="stat"
     >
       {/* Section color bleeds full width; content is capped so whitespace at
           the margins reads as composed rather than stretched on wide screens. */}

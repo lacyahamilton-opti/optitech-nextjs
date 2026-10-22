@@ -7,12 +7,15 @@ import { BrandMark } from '@/components/layout/BrandMark'
 import { LocaleSelector } from '@/components/layout/LocaleSelector'
 import SearchTrigger from '@/components/search/SearchTrigger'
 import { getSiteSettings, getRequestDomain, getRequestLocale } from '@/lib/optimizely'
+import CommerceHeaderActions from '@/components/commerce/CommerceHeaderActions'
+import { getHeaderCommerce } from '@/lib/commerce/settings'
 import { SplitHeaderShell } from '@/components/layout/SplitHeaderShell'
 import { getEnabledLanguages } from '@/lib/i18n/getEnabledLanguages'
 import { t } from '@/lib/i18n/t'
 import { localizedHref, stripLocalePrefix } from '@/lib/i18n/config'
 import type { Locale } from '@/lib/i18n/config'
 import type { NavItem } from '@/components/layout/DesktopNav'
+import { resolveCmsUrl } from '@/lib/resolveCmsUrl'
 
 const FALLBACK_NAV: NavItem[] = [
   { label: 'Product',  href: '#' },
@@ -63,6 +66,7 @@ export default async function SplitHeader() {
   const domain   = await getRequestDomain()
   const locale   = await getRequestLocale()
   const settings = await getSiteSettings(domain, locale)
+  const commerce = await getHeaderCommerce(domain)
 
   const siteName       = (settings?.siteName as string | undefined) ?? 'Site Accelerator'
   const logoSrc        = settings?.logo?.url?.default
@@ -70,7 +74,9 @@ export default async function SplitHeader() {
   const logoFit        = (settings?.logoFit as string | undefined) ?? 'full'
   const logoInvertDark = settings?.logoInvertDark === true
   const ctaLabel       = settings?.ctaLabel ?? 'Get Started'
-  const ctaHref        = normalizeNavHref(settings?.ctaUrl?.default, locale, domain)
+  // Storefronts lead with the bag, not a CTA: hide it unless one is authored.
+  const showCta        = !(commerce.enabled && !settings?.ctaLabel)
+  const ctaHref        = normalizeNavHref(resolveCmsUrl(settings?.ctaUrl, domain), locale, domain)
 
   const LOGO_IMG_CLASS: Record<string, string> = {
     full:    'max-h-10 w-auto',
@@ -87,11 +93,11 @@ export default async function SplitHeader() {
   const navItems: NavItem[] = settings?.primaryNavigation?.length
     ? settings.primaryNavigation.map((item: any) => ({
         label:    item.menuLink?.text ?? '',
-        href:     normalizeNavHref(item.menuLink?.url?.default, locale, domain),
+        href:     normalizeNavHref(resolveCmsUrl(item.menuLink?.url, domain), locale, domain),
         children: item.subNavItems?.length
           ? item.subNavItems.map((c: any) => ({
               label:       c.menuLink?.text ?? '',
-              href:        normalizeNavHref(c.menuLink?.url?.default, locale, domain),
+              href:        normalizeNavHref(resolveCmsUrl(c.menuLink?.url, domain), locale, domain),
               description: c.description ?? undefined,
               icon:        c.icon && c.icon !== 'none' ? c.icon : undefined,
             }))
@@ -125,7 +131,7 @@ export default async function SplitHeader() {
 
       <SplitHeaderShell>
         {/* ── Desktop masthead: left wing / centered logo / right wing ─────── */}
-        <div className="hidden lg:grid grid-cols-[1fr_auto_1fr] items-center gap-lg px-lg py-6">
+        <div className="hidden lg:grid grid-cols-[1fr_auto_1fr] items-center gap-md px-md py-6 2xl:gap-lg 2xl:px-lg">
 
           <div className="flex justify-end" data-stagger="split-left">
             <DesktopNav navItems={leftItems} variant="split" ariaLabel="Primary navigation" />
@@ -140,7 +146,7 @@ export default async function SplitHeader() {
             {logoEl}
           </a>
 
-          <div className="flex items-center justify-start gap-lg" data-stagger="split-right">
+          <div className="flex items-center justify-start gap-md 2xl:gap-lg" data-stagger="split-right">
             <DesktopNav navItems={rightItems} variant="split" ariaLabel="More navigation" />
 
             <div aria-hidden="true" className="w-px h-6 bg-fg/15 shrink-0" />
@@ -149,9 +155,10 @@ export default async function SplitHeader() {
               <SearchTrigger />
               <LocaleSelector enabledLocales={enabledLocales} />
               <ThemeToggle />
+              {commerce.enabled && <CommerceHeaderActions initialBagCount={commerce.bagCount} />}
             </div>
 
-            <Button href={ctaHref} size="sm" className="shrink-0">{ctaLabel}</Button>
+            {showCta && <Button href={ctaHref} size="sm" className="shrink-0">{ctaLabel}</Button>}
           </div>
 
         </div>
@@ -168,7 +175,8 @@ export default async function SplitHeader() {
           <div className="flex items-center gap-sm">
             <SearchTrigger />
             <ThemeToggle />
-            <MobileMenu navItems={navItems} ctaLabel={ctaLabel} ctaHref={ctaHref} enabledLocales={enabledLocales} />
+            {commerce.enabled && <CommerceHeaderActions initialBagCount={commerce.bagCount} showWishlist={false} showAccount />}
+            <MobileMenu navItems={navItems} ctaLabel={showCta ? ctaLabel : ''} ctaHref={ctaHref} enabledLocales={enabledLocales} />
           </div>
         </div>
       </SplitHeaderShell>

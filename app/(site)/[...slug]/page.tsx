@@ -1,4 +1,3 @@
-import { cache }                from 'react'
 import { notFound, redirect }  from 'next/navigation'
 import { draftMode }           from 'next/headers'
 import type { Metadata }       from 'next'
@@ -28,6 +27,8 @@ import BlogPage                from '@/components/pages/BlogPage'
 import CampaignPage            from '@/components/pages/CampaignPage'
 import EventPage               from '@/components/pages/EventPage'
 import TopicHubPage            from '@/components/pages/TopicHubPage'
+import CampaignLandingFrame    from '@/components/campaign/CampaignLandingFrame'
+import { fetchPageContent }    from '@/lib/pageContent'
 import Script                  from 'next/script'
 import { DraftStateBanner }    from '@/components/preview/DraftStateBanner'
 import { ExternalPreviewLinkPanel } from '@/components/preview/ExternalPreviewLinkPanel'
@@ -39,22 +40,31 @@ import { buildPageMetadata, type PageSeoFields } from '@/lib/metadata'
 import { buildJsonLd }         from '@/lib/structured-data'
 import JsonLd                  from '@/components/seo/JsonLd'
 import type { Locale }         from '@/lib/i18n/config'
+import { getCommerceSettings, currencyForLocale, getMarketCookie } from '@/lib/commerce/settings'
+import { matchPdpPath, resolvePdp, previewProductFor } from '@/lib/commerce/pdp'
+import ProductDetailPage from '@/components/pages/ProductDetailPage'
+import { resolveCmsUrl } from '@/lib/resolveCmsUrl'
 
 export const revalidate = 60
+
+/** Fields the slug route reads from an OT_CampaignLandingPage (see cms/content-types). */
+type CampaignLandingFields = PageSeoFields & {
+  campaignLook?:   string | null
+  accentOverride?: string | null
+  motionLevel?:    string | null
+  ctaLabel?:       string | null
+  ctaUrl?:         { default?: string | null } | string | null
+  returnLabel?:    string | null
+  footerRef?:      { key?: string | null } | null
+  formRef?:        { key?: string | null } | null
+  formHeading?:    string | null
+  _metadata?:      { displayName?: string | null } | null
+}
 
 type Props = {
   params:       Promise<{ slug: string[] }>
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }
-
-// ── Per-request content cache ─────────────────────────────────────────────────
-//
-// React cache() deduplicates calls with the same arguments within one React
-// render tree. generateMetadata and CmsPage both call this for the same path,
-// locale, and baseUrl — the second call is a no-op (same cached result).
-const fetchPageContent = cache(async (path: string, locale: Locale, baseUrl: string) =>
-  getLocalizedContentByPath(path, locale, baseUrl),
-)
 
 // Recursively walks a Visual Builder composition tree and collects all
 // OT_AccordionBlock question/answer pairs. Used to populate FAQPage
@@ -145,6 +155,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     )
   }
 
+  // Campaign landing page — _experience; fall back to the page name when the
+  // editor leaves the SEO title blank, so the tab/title is never just the site name.
+  if (exp?.__typename === 'OT_CampaignLandingPage') {
+    const landing = exp as CampaignLandingFields
+    return buildPageMetadata(
+      { ...landing, seoTitle: landing.seoTitle ?? landing._metadata?.displayName },
+      settings ?? {},
+      path,
+    )
+  }
+
   // Practitioner page — _experience; build SEO from page fields with a smart
   // fallback to the referenced practitioner's name + credentials + primary area.
   if (exp?.__typename === 'OT_PractitionerPage') {
@@ -171,6 +192,40 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       schemaType: (exp as any)?.schemaType || 'Person',
     }
     return buildPageMetadata(seoFields, settings ?? {}, path)
+  }
+
+  // Product detail template (visited directly or in Visual Builder) — never
+  // indexable; titled after its preview product.
+  if (exp?.__typename === 'OT_ProductDetailTemplate') {
+    const commerce = await getCommerceSettings(domain)
+    const product = commerce ? await previewProductFor(commerce.catalogId, (exp as any).previewHandle) : null
+    return buildPageMetadata(
+      { ...(exp as PageSeoFields), seoTitle: (exp as any).seoTitle ?? product?.name, noIndex: true },
+      settings ?? {},
+      path,
+    )
+  }
+
+  // Catalog product page — no CMS page at this path, commerce on, /products/<handle>.
+  const pdpHandle = !exp ? matchPdpPath(path) : null
+  if (pdpHandle) {
+    const commerce = await getCommerceSettings(domain)
+    const pdp = commerce ? await resolvePdp(pdpHandle, commerce.catalogId, locale, baseUrl, settings?.featureExperimentationSdkKey) : null
+    if (pdp) {
+      const t = pdp.template ?? {}
+      const hero = pdp.product.colours[0]?.images?.[0]
+      return buildPageMetadata(
+        {
+          seoTitle:       t.seoTitle ?? pdp.product.name,
+          seoDescription: t.seoDescription ?? pdp.product.description,
+          ogImage:        hero ? { url: { default: hero } } : undefined,
+          noIndex:        t.noIndex ?? false,
+          schemaType:     'Product',
+        },
+        settings ?? {},
+        path,
+      )
+    }
   }
 
   return buildPageMetadata((exp ?? {}) as PageSeoFields, settings ?? {}, path)
@@ -252,7 +307,7 @@ async function CmsPage({ params, searchParams }: Props) {
 
   // Full page URL for JSON-LD — prefer the configured site URL so canonical
   // references in structured data always point to the production domain.
-  const siteOrigin  = process.env.NEXT_PUBLIC_SITE_URL ?? baseUrl
+  const siteOrigin  = (process.env.NEXT_PUBLIC_SITE_URL ?? baseUrl).replace(/\/$/, '')
   const fullPageUrl = `${siteOrigin}${path}`
 
   let exp: any
@@ -496,6 +551,29 @@ async function CmsPage({ params, searchParams }: Props) {
       }
     }
 
+    // Catalog product page — no CMS page exists at this path, the host has mock
+    // commerce enabled, and the path is /products/<handle>. The product comes
+    // from the Graph catalog; the below-the-fold layout is the matching
+    // OT_ProductDetailTemplate. A CMS page at the same path always wins (it was
+    // resolved above), so other sites' /products/* pages are unaffected.
+    const pdpHandle = !exp && !dm.isEnabled ? matchPdpPath(path) : null
+    if (pdpHandle) {
+      const commerce = await getCommerceSettings(domain)
+      const pdp = commerce ? await resolvePdp(pdpHandle, commerce.catalogId, locale, baseUrl, settings?.featureExperimentationSdkKey) : null
+      if (commerce && pdp) {
+        return (
+          <ProductDetailPage
+            product={pdp.product}
+            template={pdp.template}
+            currency={currencyForLocale(commerce, locale, await getMarketCookie())}
+            locale={locale}
+            site={settings ?? {}}
+            pageUrl={fullPageUrl}
+          />
+        )
+      }
+    }
+
     // Standalone block content (not an experience) — send to the isolated preview route
     // so it renders without site chrome and with proper communicationinjector.js setup.
     if (dm.isEnabled && exp?.__typename) {
@@ -509,6 +587,52 @@ async function CmsPage({ params, searchParams }: Props) {
       redirect(`/preview?${qs}`)
     }
     notFound()
+  }
+
+  // Campaign landing page — _experience type rendered WITHOUT the site shell
+  // (app/(site)/layout.tsx drops it via lib/shellMode.ts). The locked frame supplies
+  // a slim campaign strip, the chosen look, the conversion form and a footer around
+  // the editor's free composition.
+  if (exp?.__typename === 'OT_CampaignLandingPage') {
+    const landing = exp as CampaignLandingFields
+    // Accordion FAQs on the page are emitted as FAQPage JSON-LD (answers in the
+    // static HTML for crawlers), same as the generic experience path below.
+    const landingFaqItems = exp?.composition?.nodes
+      ? extractAccordionFaqs(exp.composition.nodes)
+      : undefined
+    const landingJsonLd = buildJsonLd(
+      {
+        ...landing,
+        faqItems: landingFaqItems,
+        schemaType: landing.schemaType && landing.schemaType !== 'none' ? landing.schemaType : 'WebPage',
+      },
+      settings ?? {},
+      fullPageUrl,
+    )
+    return (
+      <>
+        <JsonLd data={landingJsonLd} />
+        {dm.isEnabled && cmsUrl && (
+          <Script src={`${cmsUrl}/util/javascript/communicationinjector.js`} />
+        )}
+        {dm.isEnabled && <NextPreviewComponent />}
+        {renderPreviewChrome(exp, { headline: exp.seoTitle ?? null })}
+        <CampaignLandingFrame
+          locale={locale}
+          look={landing.campaignLook}
+          accentOverride={landing.accentOverride}
+          motionLevel={landing.motionLevel}
+          ctaLabel={landing.ctaLabel}
+          ctaUrl={resolveCmsUrl(landing.ctaUrl)}
+          returnLabel={landing.returnLabel}
+          footerKey={landing.footerRef?.key}
+          formKey={landing.formRef?.key}
+          formHeading={landing.formHeading}
+        >
+          <CompositionRenderer nodes={exp.composition.nodes} />
+        </CampaignLandingFrame>
+      </>
+    )
   }
 
   // Practitioner page — _experience type. The referenced practitioner record
@@ -555,6 +679,34 @@ async function CmsPage({ params, searchParams }: Props) {
           </>
         )}
         <CompositionRenderer nodes={exp.composition.nodes} />
+      </>
+    )
+  }
+
+  // Product detail template — rendered with its preview product in the locked
+  // header so editors compose the below-the-fold content in context.
+  if (exp?.__typename === 'OT_ProductDetailTemplate') {
+    const commerce = await getCommerceSettings(domain)
+    const product = commerce ? await previewProductFor(commerce.catalogId, (exp as any).previewHandle) : null
+    return (
+      <>
+        {dm.isEnabled && cmsUrl && (
+          <Script src={`${cmsUrl}/util/javascript/communicationinjector.js`} />
+        )}
+        {dm.isEnabled && <NextPreviewComponent />}
+        {renderPreviewChrome(exp, { headline: exp.seoTitle ?? product?.name ?? exp._metadata?.displayName })}
+        {product && commerce ? (
+          <ProductDetailPage
+            product={product}
+            template={exp}
+            currency={currencyForLocale(commerce, locale, await getMarketCookie())}
+            locale={locale}
+            site={settings ?? {}}
+            pageUrl={fullPageUrl}
+          />
+        ) : (
+          <CompositionRenderer nodes={exp.composition.nodes} />
+        )}
       </>
     )
   }

@@ -4,6 +4,7 @@ import { OT_CardBlock as OT_CardBlockContentType } from '@/cms/content-types/OT_
 import { getCardStyles } from '@/cms/styling/OT_CardBlock.styling'
 import CardBlock from '@/components/blocks/CardBlock'
 import { richTextJson } from '@/lib/richTextJson'
+import { resolveCmsUrl } from '@/lib/resolveCmsUrl'
 
 type Props = {
   content: ContentProps<typeof OT_CardBlockContentType>
@@ -28,7 +29,7 @@ export default function OT_CardBlock({ content, displaySettings = {} }: Props) {
         }
         cta={
           content.ctaLabel
-            ? { label: content.ctaLabel, href: content.ctaUrl?.default ?? '#' }
+            ? { label: content.ctaLabel, href: resolveCmsUrl(content.ctaUrl) ?? '#' }
             : undefined
         }
         styleOptions={styleOptions}

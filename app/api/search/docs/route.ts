@@ -96,18 +96,34 @@ const MIME_TO_EXT: Record<string, string> = {
   'application/vnd.ms-excel': 'xls',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
   'text/plain': 'txt',
+  'image/jpeg': 'jpg',
+  'image/png':  'png',
+  'image/webp': 'webp',
+  'image/svg+xml': 'svg',
+  'video/mp4':  'mp4',
+}
+
+// Mime type first, then the file extension on the URL or title, so unmapped types never read as PDF.
+function resolveExtension(mimeType: string | undefined, url: string, title: string): string | null {
+  if (mimeType && MIME_TO_EXT[mimeType]) return MIME_TO_EXT[mimeType]
+  const fromName = (s: string) => s.split(/[?#]/)[0].match(/\.([a-z0-9]{2,5})$/i)?.[1]?.toLowerCase() ?? null
+  return fromName(url) ?? fromName(title)
 }
 
 async function searchGraphDocs(q: string, limit: number): Promise<DocResult[]> {
   const data = await getClient().request(DOCS_GRAPH_QUERY, { query: q, limit })
   const items: any[] = (data as any)?._AssetItem?.items ?? []
-  return items.map((item: any) => ({
-    id:        item._itemMetadata?.key ?? '',
-    title:     item._itemMetadata?.displayName ?? 'Untitled',
-    url:       item._assetMetadata?.url ?? '',
-    extension: MIME_TO_EXT[item._assetMetadata?.mimeType ?? ''] ?? null,
-    fileSize:  item._assetMetadata?.fileSize ?? null,
-  }))
+  return items.map((item: any) => {
+    const title = item._itemMetadata?.displayName ?? 'Untitled'
+    const url   = item._assetMetadata?.url ?? ''
+    return {
+      id:        item._itemMetadata?.key ?? '',
+      title,
+      url,
+      extension: resolveExtension(item._assetMetadata?.mimeType, url, title),
+      fileSize:  item._assetMetadata?.fileSize ?? null,
+    }
+  })
 }
 
 // ─── Route ───────────────────────────────────────────────────────────────────
@@ -135,9 +151,15 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // No folderId, or folderId present but CMP not configured — Graph fulltext
-  // across all accessible assets. Leaving DAM Folder ID blank in the CMS is
-  // the explicit opt-in for this unscoped mode.
+  // A folder was requested but CMP credentials are missing: return nothing rather than
+  // silently ignoring the folder and listing assets from every site.
+  if (folderId) {
+    console.warn('[search/docs] folderId supplied but CMP_CLIENT_ID / CMP_CLIENT_SECRET are not set; returning no results')
+    return NextResponse.json([])
+  }
+
+  // No folderId — Graph fulltext across all accessible assets. Leaving DAM Folder ID
+  // blank in the CMS is the explicit opt-in for this unscoped mode.
   try {
     const results = await searchGraphDocs(q, limit)
     return NextResponse.json(results)

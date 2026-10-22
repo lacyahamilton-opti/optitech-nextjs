@@ -3,6 +3,7 @@ import { getPreviewUtils } from '@optimizely/cms-sdk/react/server'
 import { OT_HeroBlock as OT_HeroBlockContentType } from '@/cms/content-types/OT_HeroBlock'
 import { getHeroStyles } from '@/cms/styling/OT_HeroBlock.styling'
 import HeroBlock, { type HeroStyleOptions } from '@/components/blocks/HeroBlock'
+import { resolveCmsUrl } from '@/lib/resolveCmsUrl'
 
 type Props = {
   content: ContentProps<typeof OT_HeroBlockContentType>
@@ -26,12 +27,12 @@ export default function OT_HeroBlock({ content, displaySettings = {} }: Props) {
         body={content.body ?? undefined}
         primaryCta={
           content.primaryCtaLabel
-            ? { label: content.primaryCtaLabel, href: content.primaryCtaUrl?.default ?? '#' }
+            ? { label: content.primaryCtaLabel, href: resolveCmsUrl(content.primaryCtaUrl) ?? '#' }
             : undefined
         }
         secondaryCta={
           content.secondaryCtaLabel
-            ? { label: content.secondaryCtaLabel, href: content.secondaryCtaUrl?.default ?? '#' }
+            ? { label: content.secondaryCtaLabel, href: resolveCmsUrl(content.secondaryCtaUrl) ?? '#' }
             : undefined
         }
         visualSrc={src(content.visual)}

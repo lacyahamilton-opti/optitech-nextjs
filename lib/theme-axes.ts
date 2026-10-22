@@ -37,6 +37,8 @@ export const PRIMARY_FONTS = {
   sora:           { var: 'var(--font-primary-b)', label: 'Sora'              },
   plusJakarta:    { var: 'var(--font-primary-c)', label: 'Plus Jakarta Sans' },
   manrope:        { var: 'var(--font-primary-d)', label: 'Manrope'           },
+  hankenGrotesk:  { var: 'var(--font-primary-e)', label: 'Hanken Grotesk'    },
+  fraunces:       { var: 'var(--font-primary-f)', label: 'Fraunces'          },
 } as const
 
 export type PrimaryFontKey = keyof typeof PRIMARY_FONTS
@@ -99,4 +101,37 @@ export function resolvePrimaryFont(key: string | null | undefined) {
 export function resolveMotionScale(key: string | null | undefined) {
   if (!key || key === DEFAULT_MOTION_INTENSITY) return null
   return MOTION_INTENSITIES[key as MotionIntensityKey] ?? null
+}
+
+// ── Brand-as-text contrast in dark mode ───────────────────────────────────────
+// The brand token is mode-constant, so a deep brand (loden green, oxblood, ink
+// blue) used as TEXT on a dark canvas can fall far below WCAG AA. Themes whose
+// brand is that deep get a lifted `--ot-brand-text` for dark grounds; every
+// other theme emits nothing and renders exactly as before.
+export const BRAND_TEXT_MIN_LIGHTNESS = 0.45
+export const BRAND_TEXT_DARK_LIFT = 'oklch(from var(--ot-brand) 0.8 calc(c * 0.85) h)'
+
+/** OKLab lightness (0–1) of an `oklch(...)` or `#rrggbb` colour; null if unparseable. */
+export function colorLightness(color: string | null | undefined): number | null {
+  if (!color) return null
+  const v = color.trim().toLowerCase()
+  const ok = v.match(/^oklch\(\s*([\d.]+)(%?)/)
+  if (ok) return ok[2] ? Number(ok[1]) / 100 : Number(ok[1])
+  const hex = v.match(/^#([0-9a-f]{6})$/)
+  if (!hex) return null
+  const lin = (i: number) => {
+    const c = parseInt(hex[1].slice(i, i + 2), 16) / 255
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+  }
+  const [r, g, b] = [lin(0), lin(2), lin(4)]
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
+  return 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s
+}
+
+/** True when this brand needs the dark-mode text lift. */
+export function needsBrandTextLift(brand: string | null | undefined): boolean {
+  const l = colorLightness(brand)
+  return l != null && l < BRAND_TEXT_MIN_LIGHTNESS
 }

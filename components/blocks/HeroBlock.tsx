@@ -211,7 +211,11 @@ export default function HeroBlock({
   styleOptions = {},
   pa = () => ({}),
 }: HeroBlockProps) {
-  const { direction = "editorialSplit", layout = "imageRight", color = "brand", animation = "none" } = styleOptions;
+  const { direction = "editorialSplit", layout: rawLayout = "imageRight", color = "brand", animation = "none" } = styleOptions;
+  // Display-template settings are free strings in the CMS (AI-authored or hand-edited pages can
+  // carry values like "split"). An unknown layout would drop the row direction and collapse the
+  // visual panel to a sliver, so anything other than imageLeft falls back to the default.
+  const layout: "imageRight" | "imageLeft" = rawLayout === "imageLeft" ? "imageLeft" : "imageRight";
 
   // Non-default art directions are self-contained compositions; delegate to them.
   // They reuse the same content + the color/animation modifiers.
@@ -245,7 +249,7 @@ export default function HeroBlock({
   const atmosLayout = hasVisual ? layout : "full"
 
   return (
-    <section className={sectionCva({ layout })} aria-label="Hero">
+    <section className={sectionCva({ layout })} aria-label="Hero" data-block="hero">
 
       {/* ── Text panel ── */}
       {/* data-theme="dark" on brand panels ensures tokens like bg-canvas, text-fg,
@@ -316,7 +320,28 @@ export default function HeroBlock({
         </div>
       )}
 
+      {eyebrow && <HeroMarquee text={eyebrow} />}
     </section>
+  );
+}
+
+/**
+ * Campaign-look marquee tape: the eyebrow repeated in a slow loop. Hidden everywhere
+ * (display:none); only the Poster and Stage looks of OT_CampaignLandingPage switch it on
+ * (components/campaign/campaign-looks.css). Decorative duplicate of the eyebrow, so it
+ * is aria-hidden. Two identical halves let the track loop seamlessly at -50%.
+ */
+function HeroMarquee({ text }: { text: string }) {
+  const half = Array.from({ length: 5 }, (_, i) => (
+    <span key={i} className="hero-marquee__item">{text}</span>
+  ));
+  return (
+    <div className="hero-marquee hidden" aria-hidden="true">
+      <div className="hero-marquee__track">
+        <div className="hero-marquee__half">{half}</div>
+        <div className="hero-marquee__half">{half}</div>
+      </div>
+    </div>
   );
 }
 
@@ -430,7 +455,7 @@ function SpotlightHero({
   );
 
   return (
-    <section className="relative overflow-hidden bg-canvas px-md py-lg lg:px-lg lg:py-xl" aria-label="Hero">
+    <section className="relative overflow-hidden bg-canvas px-md py-lg lg:px-lg lg:py-xl" aria-label="Hero" data-block="hero">
       <div className="hero-spotlight-aura" aria-hidden />
       {hasVisual ? (
         // A fixed aspect ratio for the image scales WITH viewport width (wider
@@ -504,7 +529,7 @@ function OverlapHero({
 
   if (!hasVisual) {
     return (
-      <section className="bg-canvas px-md py-lg lg:px-lg lg:py-xl" aria-label="Hero">
+      <section className="bg-canvas px-md py-lg lg:px-lg lg:py-xl" aria-label="Hero" data-block="hero">
         <div
           className={`hero-overlap-plate rounded-ot-surface relative mx-auto max-w-4xl ${groundCva({ color })} p-lg lg:p-2xl ${anim}`}
           data-theme={color === "brand" ? "dark" : undefined}
@@ -519,7 +544,7 @@ function OverlapHero({
   }
 
   return (
-    <section className="bg-canvas px-md py-lg lg:px-lg lg:py-xl" aria-label="Hero">
+    <section className="bg-canvas px-md py-lg lg:px-lg lg:py-xl" aria-label="Hero" data-block="hero">
       <div className="relative z-10 flex flex-col gap-lg lg:flex-row lg:items-center lg:gap-0">
         <div
           className={`relative w-full aspect-[4/3] lg:aspect-auto lg:h-96 lg:flex-1 overflow-hidden rounded-ot-surface ${
@@ -577,7 +602,7 @@ function DiagonalHero({
     <section
       className={`${groundCva({ color })} relative overflow-hidden`}
       data-theme={color === "brand" ? "dark" : undefined}
-      aria-label="Hero"
+      aria-label="Hero" data-block="hero"
     >
       {hasVisual && (
         <>

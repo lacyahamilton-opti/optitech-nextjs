@@ -71,7 +71,8 @@ export default function Section({ content, displaySettings = {} }: Props) {
       data-stagger={isAnimated ? entranceAnimation : undefined}
     >
       <div className={`flex flex-col flex-1 ${widthClass} ${vSpaceClass}`}>
-        <OptimizelyGridSection nodes={content.nodes ?? []} ComponentWrapper={BlockWrapper} />
+        {/* SDK 3 passes the section's rows on __composition, not content.nodes */}
+        <OptimizelyGridSection nodes={content.nodes ?? content.__composition?.nodes ?? []} ComponentWrapper={BlockWrapper} />
       </div>
     </section>
   )
