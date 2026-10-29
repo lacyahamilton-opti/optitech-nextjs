@@ -271,11 +271,13 @@ Motion is editorial expression — it makes momentum visible. The system has two
 
 `MotionObserver` (`components/providers/MotionObserver.tsx`) is a client-side IntersectionObserver that watches `[data-stagger]` elements. When a row enters the viewport, the observer adds `data-in` and the CSS in `globals.css` animates each child column with a 120ms delay between them.
 
-Two modes, controlled by the Visual Builder's Row display settings:
+Four modes, controlled by the `entranceAnimation` display setting on Rows, Sections and blocks:
 - `data-stagger="slide"` — `slideUp`: `opacity: 0 + translateY(1.5rem)` → natural position
 - `data-stagger="fade"` — `fadeIn`: `opacity: 0` → `opacity: 1`
+- `data-stagger="parallax"` — "rise & focus": 3rem travel + `scale(0.97)` + `blur(6px)` resolving to sharp (ends at `filter: none`)
+- `data-stagger="reveal"` — "Curtain reveal": bottom-to-top `clip-path` unmask + short settle; negative insets so shadows and blooms are never clipped
 
-Both use `--ot-ease-kinetic` at 0.6s duration.
+All use `--ot-ease-kinetic`; durations derive from `--ot-dur-slow` so `--ot-motion-scale` scales them. Child delays step 120ms for columns 2-4, then tighten (440/510/570/620ms cap) so wide rows still finish quickly.
 
 ### Block-level animations
 

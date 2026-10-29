@@ -751,7 +751,7 @@ function RowSettingsShowcase() {
             { setting: 'verticalPadding',   values: 'none · small · medium · large · xl' },
             { setting: 'columnRhythm',      values: 'none · gentle · moderate · bold' },
             { setting: 'breakpoint',        values: 'sm · md · lg · xl (when columns go side-by-side)' },
-            { setting: 'entranceAnimation', values: 'none · fade · slide · parallax' },
+            { setting: 'entranceAnimation', values: 'none · fade · slide · parallax · reveal' },
           ].map(r => (
             <div key={r.setting} className="flex flex-col md:flex-row md:gap-xl">
               <span className="text-fg w-[200px] flex-none">{r.setting}</span>
@@ -878,7 +878,7 @@ function SectionSettingsShowcase() {
             { setting: 'verticalSpacing',   values: 'none · small · medium · large · xl' },
             { setting: 'backgroundColor',   values: 'none · canvas · surface · brand · brandDeep · glass' },
             { setting: 'sectionOverlap',    values: 'none · shallow (16px) · mid (32px) · deep (64px) · full (128px)' },
-            { setting: 'entranceAnimation', values: 'none · fade · slide · parallax' },
+            { setting: 'entranceAnimation', values: 'none · fade · slide · parallax · reveal' },
           ].map(r => (
             <div key={r.setting} className="flex flex-col md:flex-row md:gap-xl">
               <span className="text-fg w-[200px] flex-none">{r.setting}</span>

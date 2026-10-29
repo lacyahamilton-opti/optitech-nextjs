@@ -73,6 +73,7 @@ export const OT_VideoDefault = displayTemplate({
         fade:     { displayName: 'Fade in',        sortOrder: 20 },
         slide:    { displayName: 'Slide up',       sortOrder: 30 },
         parallax: { displayName: 'Parallax',       sortOrder: 40 },
+        reveal:   { displayName: 'Curtain reveal', sortOrder: 50 },
       },
     },
   },

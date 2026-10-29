@@ -747,9 +747,21 @@ html {
  * motion-ready is added to <html> after the first IO callback fires so that
  * visible elements already have data-in before we hide off-screen ones.
  * ─────────────────────────────────────────────────────────────────────────── */
+/* "Parallax" = rise & focus: a long travel, a hair of scale and a soft
+ * blur-to-sharp, so the column feels like it resolves out of depth rather than
+ * just sliding. Ends at filter: none (not blur(0)) so no stacking context or
+ * compositing layer is left behind once it settles. */
 @keyframes parallaxUp {
-  from { opacity: 0; transform: translateY(calc(var(--ot-rhythm-offset, 0px) + var(--ot-rhythm-nudge, 0px) + 3rem)); }
-  to   { opacity: 1; transform: translateY(calc(var(--ot-rhythm-offset, 0px) + var(--ot-rhythm-nudge, 0px))); }
+  from { opacity: 0; filter: blur(6px); transform: translateY(calc(var(--ot-rhythm-offset, 0px) + var(--ot-rhythm-nudge, 0px) + 3rem)) scale(0.97); }
+  to   { opacity: 1; filter: none;      transform: translateY(calc(var(--ot-rhythm-offset, 0px) + var(--ot-rhythm-nudge, 0px))) scale(1); }
+}
+
+/* "Curtain reveal": each column is unmasked bottom-to-top by an animating
+ * clip-path inset (paint-only, no layout), with a short settle underneath.
+ * Side/bottom insets are negative so shadows and blooms are never clipped. */
+@keyframes revealWipe {
+  from { clip-path: inset(100% -6rem -6rem -6rem); transform: translateY(calc(var(--ot-rhythm-offset, 0px) + var(--ot-rhythm-nudge, 0px) + 1.25rem)); }
+  to   { clip-path: inset(-6rem);                  transform: translateY(calc(var(--ot-rhythm-offset, 0px) + var(--ot-rhythm-nudge, 0px))); }
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -763,15 +775,27 @@ html {
   }
   .motion-ready [data-stagger="parallax"]:not([data-in]) > * {
     opacity: 0;
-    transform: translateY(calc(var(--ot-rhythm-offset, 0px) + var(--ot-rhythm-nudge, 0px) + 3rem));
+    filter: blur(6px);
+    transform: translateY(calc(var(--ot-rhythm-offset, 0px) + var(--ot-rhythm-nudge, 0px) + 3rem)) scale(0.97);
+  }
+  .motion-ready [data-stagger="reveal"]:not([data-in]) > * {
+    clip-path: inset(100% -6rem -6rem -6rem);
+    transform: translateY(calc(var(--ot-rhythm-offset, 0px) + var(--ot-rhythm-nudge, 0px) + 1.25rem));
   }
   /* Animate columns in when the row enters the viewport */
   [data-stagger="slide"][data-in]    > * { animation: slideUp    var(--ot-dur-slow) var(--ot-ease-kinetic) both; }
   [data-stagger="fade"][data-in]     > * { animation: fadeIn     var(--ot-dur-slow) var(--ot-ease-kinetic) both; }
-  [data-stagger="parallax"][data-in] > * { animation: parallaxUp 0.9s var(--ot-ease-kinetic) both; } /* dur-exempt: 900ms — nearest slow(600) Δ300ms */
+  [data-stagger="parallax"][data-in] > * { animation: parallaxUp calc(var(--ot-dur-slow) * 1.5)  var(--ot-ease-kinetic) both; }
+  [data-stagger="reveal"][data-in]   > * { animation: revealWipe calc(var(--ot-dur-slow) * 1.25) var(--ot-ease-kinetic) both; }
+  /* Cascade. Steps tighten after the 4th so a wide row (5-8 columns) finishes
+   * in under a second instead of popping in all at once. */
   [data-stagger][data-in] > *:nth-child(2) { animation-delay: 120ms; }
   [data-stagger][data-in] > *:nth-child(3) { animation-delay: 240ms; }
   [data-stagger][data-in] > *:nth-child(4) { animation-delay: 360ms; }
+  [data-stagger][data-in] > *:nth-child(5) { animation-delay: 440ms; }
+  [data-stagger][data-in] > *:nth-child(6) { animation-delay: 510ms; }
+  [data-stagger][data-in] > *:nth-child(7) { animation-delay: 570ms; }
+  [data-stagger][data-in] > *:nth-child(n+8) { animation-delay: 620ms; }
 }
 
 /* ── DividerBlock "draw" reveal ──────────────────────────────────────────────

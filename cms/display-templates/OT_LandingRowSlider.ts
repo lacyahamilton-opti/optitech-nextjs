@@ -111,6 +111,7 @@ export const OT_LandingRowSlider = displayTemplate({
         none:  { displayName: 'None',     sortOrder: 10 },
         fade:  { displayName: 'Fade in',  sortOrder: 20 },
         slide: { displayName: 'Slide up', sortOrder: 30 },
+        reveal: { displayName: 'Curtain reveal', sortOrder: 40 },
       },
     },
   },

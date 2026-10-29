@@ -525,6 +525,10 @@
 .ot-campaign[data-look="neon"] [data-block="accordion"] .border-t[data-state] :is(h3, button, h3 *, button *):not(svg):not(svg *) { color: var(--ot-fg); opacity: 1; }
 .ot-campaign[data-look="neon"] [data-block="accordion"] .border-t[data-state] svg { color: var(--nc); }
 .ot-campaign[data-look="neon"] [data-block="accordion"] .border-t[data-state] [role="region"] { padding-inline: calc(var(--ot-space-md) + 0.75rem); color: var(--ot-fg-muted); }
+/* Stage legibility: the open question defaults to text-brand, which on stage is a dark slab
+ * colour and vanishes against the floor. Keep it full-strength; the hot accent marks the icon. */
+.ot-campaign[data-look="stage"] [data-block="accordion"] .border-t[data-state] :is(h3, button, h3 *, button *):not(svg):not(svg *) { color: var(--ot-fg); opacity: 1; }
+.ot-campaign[data-look="stage"] [data-block="accordion"] .border-t[data-state="open"] svg { color: var(--ot-accent); }
 .ot-campaign[data-look="neon"] .ot-field::placeholder { color: var(--ot-fg-muted); opacity: 0.85; }
 .ot-campaign[data-look="comic"] .ot-field::placeholder { color: var(--cl-ink); opacity: 0.6; }
 
