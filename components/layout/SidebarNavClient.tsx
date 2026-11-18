@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { ChevronLeft } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { ChevronLeft, Menu } from 'lucide-react'
 
 const STORAGE_KEY = 'ot-sidebar-open'
 
@@ -13,75 +13,53 @@ const STORAGE_KEY = 'ot-sidebar-open'
 export function SidebarNavShell({ children, defaultOpen = true }: { children: React.ReactNode; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen)
 
-  // On the live site: hydrate from localStorage so the user's last preference
-  // is restored. In preview (defaultOpen=false) skip this — we always start
-  // collapsed and don't want stored live-site prefs leaking into the VB view.
-  useEffect(() => {
-    if (!defaultOpen) return
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY)
-      if (stored === 'false') setOpen(false)
-    } catch {}
-  }, [defaultOpen])
+  // Remember the last open/closed choice across refreshes. Preview (defaultOpen=false,
+  // the CMS visual builder) keeps its own key so live-site prefs don't leak into it;
+  // it still starts collapsed until the editor has opened it once.
+  const storageKey = defaultOpen ? STORAGE_KEY : `${STORAGE_KEY}-preview`
+  const hydrated = useRef(false)
 
-  // Sync open state → HTML data attribute + localStorage (live site only).
+  // Sync open state → HTML data attribute, and persist once the stored value has been read.
   useEffect(() => {
     document.documentElement.dataset.sidebarOpen = open ? 'true' : 'false'
-    if (defaultOpen) {
-      try { localStorage.setItem(STORAGE_KEY, String(open)) } catch {}
-    }
-  }, [open, defaultOpen])
+    if (!hydrated.current) return
+    try { localStorage.setItem(storageKey, String(open)) } catch {}
+  }, [open, storageKey])
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(storageKey)
+      if (stored === 'true') setOpen(true)
+      else if (stored === 'false') setOpen(false)
+    } catch {}
+    hydrated.current = true
+  }, [storageKey])
 
   return (
     <>
-      {/* Animated sidebar — children are server-rendered nav content */}
+      {/* The rail. A closed rail is inert, so Tab skips its links. Children are server-rendered nav content. */}
       <aside
-        className="hidden lg:flex flex-col fixed inset-y-0 left-0 z-50 border-r border-fg/8"
-        style={{
-          width:      'var(--ot-sidebar-width, 240px)',
-          background: 'var(--ot-surface)',
-          boxShadow:  '4px 0 32px var(--ot-bloom-brand-faint)',
-          transform:  open ? 'translateX(0)' : 'translateX(-100%)',
-          transition: 'transform 300ms cubic-bezier(0.16, 1, 0.3, 1)',
-        }}
+        data-block="site-nav"
+        data-style="sidebar"
+        data-open={open}
         aria-label="Site navigation"
-        aria-hidden={!open || undefined}
+        inert={!open}
       >
         {children}
       </aside>
 
-      {/* Toggle tab — rides the right edge of the sidebar, always accessible.
-          Flat left edge butts against the sidebar; the right corners follow
-          the Corner Style axis (rounded-ot-control) instead of a hardcoded
-          radius — sharp by default, like every other control in the system.
-          Brand fill keeps it visible on any surface or theme color; the
-          shadow is the same chromatic bloom used everywhere else, never grey. */}
+      {/* Toggle: a tab on the rail's edge when open; a labeled Menu button in the corner when collapsed. */}
       <button
         type="button"
+        data-block="site-nav"
+        data-part="rail-toggle"
+        data-open={open}
         onClick={() => setOpen(v => !v)}
-        aria-label={open ? 'Collapse sidebar' : 'Expand sidebar'}
-        className={[
-          'fixed top-14 z-51 hidden lg:flex items-center justify-center',
-          'w-6 h-12',
-          'rounded-tr-[var(--ot-radius-control)] rounded-br-[var(--ot-radius-control)]',
-          'bg-brand text-fg-on-brand',
-          'shadow-[2px_0_16px_var(--ot-bloom-brand-faint)]',
-          'hover:bg-brand-hover',
-          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand',
-        ].join(' ')}
-        style={{
-          left:       open ? 'var(--ot-sidebar-width, 240px)' : '0px',
-          transition: 'left 300ms cubic-bezier(0.16, 1, 0.3, 1)',
-        }}
+        aria-expanded={open}
+        aria-label={open ? 'Collapse sidebar' : 'Open menu'}
       >
-        <ChevronLeft
-          size={14}
-          strokeWidth={2.5}
-          style={{
-            transform:  open ? 'rotate(0deg)' : 'rotate(180deg)',
-            transition: 'transform 300ms cubic-bezier(0.16, 1, 0.3, 1)',
-          }}
-        />
+        {open ? <ChevronLeft size={16} strokeWidth={2} aria-hidden /> : <Menu size={18} strokeWidth={2} aria-hidden />}
+        <span data-part="rail-toggle-t">Menu</span>
       </button>
     </>
   )

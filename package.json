@@ -20,9 +20,20 @@
     "check:feeds": "tsx scripts/check-feeds.ts"
   },
   "dependencies": {
+    "@fontsource-variable/caveat": "^5.3.0",
+    "@fontsource-variable/fraunces": "^5.3.0",
+    "@fontsource-variable/geist-mono": "^5.3.0",
+    "@fontsource-variable/hanken-grotesk": "^5.3.0",
+    "@fontsource-variable/manrope": "^5.3.0",
+    "@fontsource-variable/orbitron": "^5.3.0",
+    "@fontsource-variable/plus-jakarta-sans": "^5.3.0",
+    "@fontsource-variable/sora": "^5.3.0",
+    "@fontsource-variable/source-serif-4": "^5.3.1",
+    "@fontsource-variable/syne": "^5.3.0",
+    "@fontsource/poppins": "^5.3.0",
     "@google-cloud/bigquery": "^8.3.1",
-    "@optimizely/cms-cli": "^3.0.0",
-    "@optimizely/cms-sdk": "^3.0.0",
+    "@optimizely/cms-cli": "^3.1.0",
+    "@optimizely/cms-sdk": "^3.1.0",
     "@optimizely/optimizely-sdk": "^6.6.0",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-dialog": "^1.1.15",
@@ -57,5 +68,9 @@
     "tailwindcss": "^4.3.0",
     "tsx": "4.23.15",
     "typescript": "^5"
+  },
+  "packageManager": "yarn@3.8.7",
+  "engines": {
+    "node": ">=22.23.4"
   }
 }

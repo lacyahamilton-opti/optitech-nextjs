@@ -35,7 +35,7 @@ const FALLBACK_NAV: NavItem[] = [
  * All internal paths are run through localizedHref so nav links stay
  * locale-aware: on /es/* every link points to /es/... automatically.
  */
-function normalizeNavHref(
+export function normalizeNavHref(
   rawUrl: string | null | undefined,
   locale: Locale,
   domain: string,       // request Host header, e.g. "your-site.vercel.app"
@@ -128,10 +128,10 @@ export default async function Header() {
         {t(locale, 'nav.skipToMain')}
       </a>
 
-      <header className="sticky top-0 z-50 bg-canvas/80 backdrop-blur-md shadow-[0_1px_0_0_var(--ot-bloom-brand-border),0_8px_32px_0_var(--ot-bloom-brand-faint)]">
-        <div className="flex items-center justify-between px-md py-md lg:px-lg">
+      <header data-block="site-nav" data-style="top-bar">
+        <div data-part="bar">
 
-          <a href={localizedHref('/', locale)} aria-label={`${logoAlt} — ${t(locale, 'nav.home')}`} className="flex items-center h-12">
+          <a href={localizedHref('/', locale)} data-part="logo" aria-label={`${logoAlt} — ${t(locale, 'nav.home')}`}>
             {logoSrc ? (
               <LogoImage
                 src={logoSrc}
@@ -146,19 +146,19 @@ export default async function Header() {
 
           <DesktopNav navItems={navItems} />
 
-          <div className="hidden lg:flex items-center gap-sm">
+          <div data-part="tools">
             <SearchTrigger />
-            <LocaleSelector enabledLocales={enabledLocales} />
-            <ThemeToggle />
+            <LocaleSelector enabledLocales={enabledLocales} scoped />
+            <ThemeToggle scoped />
             {commerce.enabled && <CommerceHeaderActions initialBagCount={commerce.bagCount} />}
             {showCta && <Button href={ctaHref} size="sm">{ctaLabel}</Button>}
           </div>
 
-          <div className="lg:hidden flex items-center gap-sm">
+          <div data-part="mobile-tools">
             <SearchTrigger />
-            <ThemeToggle />
+            <ThemeToggle scoped />
             {commerce.enabled && <CommerceHeaderActions initialBagCount={commerce.bagCount} showWishlist={false} showAccount />}
-            <MobileMenu navItems={navItems} ctaLabel={showCta ? ctaLabel : ''} ctaHref={ctaHref} enabledLocales={enabledLocales} />
+            <MobileMenu navStyle="top-bar" navItems={navItems} ctaLabel={showCta ? ctaLabel : ''} ctaHref={ctaHref} enabledLocales={enabledLocales} />
           </div>
 
         </div>

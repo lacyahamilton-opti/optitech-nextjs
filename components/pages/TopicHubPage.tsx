@@ -1,23 +1,24 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback, startTransition, useId } from 'react'
+import { useState, useEffect, useRef, useCallback, startTransition, useId, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import dynamic from 'next/dynamic'
 import {
-  Search, Sparkles, Loader2, X,
-  CalendarDays, Newspaper, FileText, BookOpen, Code2,
-  MapPin, Video, ArrowRight, ArrowDownToLine, ChevronDown,
-  Users, Building2, Globe, Award, Layers,
-  GraduationCap, Heart, Scale, BarChart3,
-  Lightbulb, Folder, Tag, MessageSquare,
-  Phone, Mail, ExternalLink,
+  Search, Sparkles, Loader2, X, Newspaper, FileText, Code2,
+  MapPin, Video, ArrowRight, ArrowDownToLine, ChevronDown, LayoutGrid, ArrowLeft,
 } from 'lucide-react'
 import type { SearchResult } from '@/lib/search'
 import type { TopicHubBucket, TopicHubRecommendation } from '@/lib/topicHub'
 import { eventTypeLabel } from '@/lib/eventFormat'
 import LocationPlate from '@/components/location/LocationPlate'
 import LocationLabelBadge from '@/components/location/LocationLabelBadge'
+import CodeView from '@/components/taxonomy/CodeView'
+import { t } from '@/lib/i18n/t'
+import { trackTopicSelect } from '@/components/taxonomy/track'
+import {
+  TopicPanel, CardTags, Names, useTaggedPages, fromTagged, poolFor, score, topicsOf, bucketIcon, defaultBucketName, type Match, type HubItem,
+} from '@/components/taxonomy/TopicBrowser'
 
 const PrimaryTextDepth3D = dynamic(
   () => import('@/components/blocks/PrimaryTextDepth3D.client'),
@@ -41,21 +42,6 @@ export type TopicHubConfig = {
   damFolderContainerId:  string | null
   searchRecommendations: TopicHubRecommendation[]
   contentBuckets:        TopicHubBucket[]
-}
-
-// ─── Icon resolver ─────────────────────────────────────────────────────────────
-
-const ICON_MAP: Record<string, typeof CalendarDays> = {
-  CalendarDays,  Newspaper,  FileText,  BookOpen,
-  Users,  MapPin,  Building2,  Video,  Globe,
-  Award,  Layers,  Sparkles,  GraduationCap,
-  Heart,  Scale,  BarChart3,  Lightbulb,
-  Folder,  Tag,  MessageSquare,
-}
-
-function BucketIcon({ name, size = 16 }: { name: string | null; size?: number }) {
-  const Icon = (name && ICON_MAP[name]) ? ICON_MAP[name] : Layers
-  return <Icon size={size} className="text-brand flex-none" aria-hidden />
 }
 
 // ─── Header effect system ──────────────────────────────────────────────────────
@@ -83,58 +69,45 @@ function formatShortDate(iso?: string): string | null {
   } catch { return null }
 }
 
+const DOC_TYPE: Record<string, string> = {
+  pdf: 'PDF document', doc: 'Word document', docx: 'Word document',
+  xls: 'Excel spreadsheet', xlsx: 'Excel spreadsheet',
+  ppt: 'PowerPoint presentation', pptx: 'PowerPoint presentation', txt: 'Text file',
+}
+
+// The effects topic-hub.css draws itself (with mode-aware inks). Every other effect keeps its global class.
+const SCOPED_EFFECTS = new Set(['none', 'outline', 'gradient', 'highlight'])
+
 function formatDocFileSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-// ─── Blog card ─────────────────────────────────────────────────────────────────
+// ─── Cards (styled by topic-hub.css) ──────────────────────────────────────────
 
-function BlogCard({ result }: { result: SearchResult }) {
+function BlogCard({ result, sel }: { result: HubItem; sel: string[] }) {
   return (
-    <a
-      href={result.url}
-      className="group flex flex-col h-full bg-surface border border-fg/8 rounded-ot-surface overflow-hidden card-hover-lift focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-    >
-      <div className="aspect-video overflow-hidden shrink-0">
+    <a href={result.url} data-part="card" data-kind="blog">
+      <span data-part="media">
         {result.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={result.imageUrl}
-            alt={result.title}
-            loading="lazy"
-            className="w-full h-full object-cover motion-safe:transition-transform motion-safe:duration-500 motion-safe:ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.04]"
-          />
+          <img src={result.imageUrl} alt="" loading="lazy" />
         ) : (
-          <div className="w-full h-full bg-linear-to-br from-brand/20 to-canvas" />
+          <span data-part="media-fill" aria-hidden="true"><Newspaper size={28} strokeWidth={1.5} /></span>
         )}
-      </div>
-      <div className="flex flex-col flex-1 px-md pt-md pb-lg">
-        {result.topic && (
-          <div className="mb-sm flex items-center gap-xs">
-            <span className="block w-1.5 h-1.5 bg-accent flex-none" aria-hidden />
-            <span className="text-label uppercase tracking-label font-semibold text-accent">
-              {result.topic.charAt(0).toUpperCase() + result.topic.slice(1)}
-            </span>
-          </div>
-        )}
-        <h3 className="text-title leading-title font-semibold text-fg text-balance line-clamp-2">
-          {result.title}
-        </h3>
-        {result.excerpt && (
-          <p className="mt-xs text-body-sm text-fg-muted line-clamp-2 text-pretty">{result.excerpt}</p>
-        )}
-        {result.published && (
-          <p className="mt-auto pt-sm text-label text-fg-muted">{formatShortDate(result.published)}</p>
-        )}
-      </div>
+      </span>
+      <span data-part="card-body">
+        {result.topic && <span data-part="eyebrow">{result.topic.charAt(0).toUpperCase() + result.topic.slice(1)}</span>}
+        <span data-part="card-title">{result.title}</span>
+        {result.excerpt && <span data-part="excerpt">{result.excerpt}</span>}
+        {result.published && <span data-part="meta">{formatShortDate(result.published)}</span>}
+        <CardTags item={result} sel={sel} />
+      </span>
     </a>
   )
 }
 
-// ─── Event card ────────────────────────────────────────────────────────────────
-
-function EventCard({ result }: { result: SearchResult }) {
+function EventCard({ result, sel }: { result: HubItem; sel: string[] }) {
   const typeLabel    = result.eventType ? eventTypeLabel(result.eventType) : null
   const LocationIcon = result.locationType === 'virtual' ? Video : MapPin
   let month = '', day = ''
@@ -145,405 +118,196 @@ function EventCard({ result }: { result: SearchResult }) {
       day   = String(d.getDate())
     } catch {}
   }
-
   return (
-    <a
-      href={result.url}
-      className="group flex gap-md h-full bg-surface border border-fg/8 rounded-ot-surface p-md card-hover-lift focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-    >
+    <a href={result.url} data-part="card" data-kind="event">
       {month && (
-        <div className="flex-none w-11 text-center pt-px">
-          <p className="text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-fg-muted leading-none">{month}</p>
-          <p className="text-title font-extrabold tabular-nums leading-tight text-brand mt-0.5">{day}</p>
-        </div>
+        <span data-part="datetile" aria-hidden="true"><span>{month}</span><b>{day}</b></span>
       )}
-      <div className="min-w-0 flex-1">
-        {typeLabel && (
-          <span className="inline-flex items-center rounded-ot-control bg-brand text-fg-on-brand px-2 py-0.5 text-[0.6875rem] font-bold uppercase tracking-[0.08em] leading-none mb-xs">
-            {typeLabel}
+      <span data-part="card-body">
+        {typeLabel && <span data-part="type-chip">{typeLabel}</span>}
+        <span data-part="card-title">{result.title}</span>
+        {(result.locationLabel || month) && (
+          <span data-part="meta">
+            {result.locationLabel && <LocationIcon size={14} strokeWidth={2} aria-hidden />}
+            {month && <span className="sr-only">{month} {day}, </span>}
+            {result.locationLabel}
           </span>
         )}
-        <h3 className="text-title leading-title font-semibold text-fg line-clamp-2">{result.title}</h3>
-        <div className="mt-xs flex flex-wrap gap-x-sm gap-y-xs text-label text-fg-muted">
-          {result.locationLabel && (
-            <span className="flex items-center gap-xs min-w-0">
-              <LocationIcon size={12} strokeWidth={2} className="flex-none" aria-hidden />
-              <span className="truncate">{result.locationLabel}</span>
-            </span>
-          )}
-        </div>
-      </div>
+        <CardTags item={result} sel={sel} />
+      </span>
     </a>
   )
 }
 
-// ─── Page / Experience card ─────────────────────────────────────────────────────
-
-function PageCard({ result }: { result: SearchResult }) {
+function PageCard({ result, sel }: { result: HubItem; sel: string[] }) {
   return (
-    <a
-      href={result.url}
-      className="group flex items-start gap-md h-full bg-surface border border-fg/8 rounded-ot-surface p-md card-hover-lift focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-    >
-      <FileText size={18} className="flex-none text-brand mt-0.5" aria-hidden />
-      <div className="min-w-0 flex-1">
-        <h3 className="text-title leading-title font-semibold text-fg group-hover:text-brand motion-safe:transition-colors motion-safe:duration-150">
-          {result.title}
-        </h3>
-        {result.excerpt && (
-          <p className="mt-xs text-body-sm text-fg-muted line-clamp-2 text-pretty">{result.excerpt}</p>
-        )}
-      </div>
-      <ArrowRight
-        size={15}
-        className="flex-none text-fg-muted/30 group-hover:text-brand group-hover:translate-x-0.5 motion-safe:transition-all motion-safe:duration-150 mt-1"
-        aria-hidden
-      />
+    <a href={result.url} data-part="card" data-kind="page">
+      <span data-part="icon-tile" aria-hidden="true"><FileText size={18} strokeWidth={2} /></span>
+      <span data-part="card-body">
+        <span data-part="card-title">{result.title}</span>
+        {result.excerpt && <span data-part="excerpt">{result.excerpt}</span>}
+        <CardTags item={result} sel={sel} />
+      </span>
+      <span data-part="go" aria-hidden="true"><ArrowRight size={16} strokeWidth={2} /></span>
     </a>
   )
 }
 
-// ─── Practitioner card ──────────────────────────────────────────────────────────
-
-function PractitionerCard({ result }: { result: SearchResult }) {
-  const hasLink = !!result.url
-
-  const inner = (
-    <div className="flex items-start gap-md">
-      {/* Headshot */}
-      <div className="flex-none w-13 h-13 rounded-ot-surface overflow-hidden bg-surface border border-fg/10 shrink-0">
-        {result.imageUrl ? (
+function PractitionerCard({ result, sel }: { result: HubItem; sel: string[] }) {
+  const body = (
+    <>
+      <span data-part="headshot">
+        {result.imageUrl && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={result.imageUrl}
-            alt={result.title}
-            loading="lazy"
-            className="w-full h-full object-cover object-top"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <Users size={20} className="text-fg-muted/25" aria-hidden />
-          </div>
+          <img src={result.imageUrl} alt="" loading="lazy" />
         )}
-      </div>
-
-      {/* Identity */}
-      <div className="min-w-0 flex-1">
-        <p className="text-title leading-title font-semibold text-fg line-clamp-1 group-hover:text-brand motion-safe:transition-colors motion-safe:duration-150">
-          {result.title}
-        </p>
-        {result.credentials && (
-          <p className="mt-0.5 text-label text-fg-muted/70 font-medium">{result.credentials}</p>
-        )}
-        {result.practitionerTitle && (
-          <p className="text-label text-fg-muted/50">{result.practitionerTitle}</p>
-        )}
-        {result.excerpt && !result.practitionerTitle && (
-          <p className="mt-xs text-body-sm text-fg-muted line-clamp-2">{result.excerpt}</p>
-        )}
-      </div>
-
-      {hasLink && (
-        <ArrowRight
-          size={14}
-          className="flex-none text-fg-muted/25 group-hover:text-brand group-hover:translate-x-0.5 motion-safe:transition-all motion-safe:duration-150 mt-1 shrink-0"
-          aria-hidden
-        />
-      )}
-    </div>
+      </span>
+      <span data-part="card-body">
+        <span data-part="card-title">{result.title}</span>
+        {result.practitionerTitle && <span data-part="role">{result.practitionerTitle}</span>}
+        {result.credentials && <span data-part="meta">{result.credentials}</span>}
+        {result.excerpt && !result.practitionerTitle && <span data-part="excerpt">{result.excerpt}</span>}
+        <CardTags item={result} sel={sel} />
+      </span>
+      {result.url && <span data-part="go" aria-hidden="true"><ArrowRight size={16} strokeWidth={2} /></span>}
+    </>
   )
-
-  if (!hasLink) {
-    return (
-      <div className="h-full bg-surface border border-fg/8 rounded-ot-surface p-md">
-        {inner}
-      </div>
-    )
-  }
-
-  return (
-    <a
-      href={result.url}
-      className="group flex flex-col h-full bg-surface border border-fg/8 rounded-ot-surface p-md card-hover-lift focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-    >
-      {inner}
-    </a>
-  )
+  return result.url
+    ? <a href={result.url} data-part="card" data-kind="person">{body}</a>
+    : <div data-part="card" data-kind="person">{body}</div>
 }
 
-// ─── Location card ─────────────────────────────────────────────────────────────
-// Locations are informational — OT_LocationProfile has no page URL. Mirrors the
-// image-plate + badge + stacked-details layout of the CMS's own location detail
-// preview (cms/components/OT_LocationProfile.tsx) rather than the directory
-// listing's hover-reveal card, so a location reads the same in search results as
-// it does when an editor opens the record directly.
-
-function LocationCard({ result }: { result: SearchResult }) {
+// Locations are informational (OT_LocationProfile has no page URL), so the card is not a link.
+function LocationCard({ result }: { result: HubItem }) {
   return (
-    <div className="flex flex-col h-full bg-surface border border-fg/8 rounded-ot-surface overflow-hidden">
-      <div className="relative aspect-video shrink-0 bg-canvas">
-        <LocationPlate shape="fill" src={result.imageUrl} name={result.title} />
-        {result.locationBadge && (
-          <div className="absolute left-0 top-4 z-10">
-            <LocationLabelBadge label={result.locationBadge} />
-          </div>
-        )}
-      </div>
-
-      <div className="flex flex-col flex-1 gap-xs px-md pt-md pb-lg">
-        <h3 className="text-title leading-title font-semibold text-fg text-balance line-clamp-2">
-          {result.title}
-        </h3>
+    <div data-part="card" data-kind="location">
+      <span data-part="media">
+        <LocationPlate shape="fill" src={result.imageUrl} name={result.title} alt="" />
+        {result.locationBadge && <LocationLabelBadge label={result.locationBadge} />}
+      </span>
+      <span data-part="card-body">
+        <span data-part="card-title">{result.title}</span>
         {result.address && (
-          <p className="flex items-start gap-1.5 text-body-sm text-fg-muted">
-            <MapPin size={13} strokeWidth={2} className="flex-none mt-0.5 text-brand" aria-hidden />
-            <span className="line-clamp-2">{result.address}</span>
-          </p>
+          <span data-part="meta"><MapPin size={14} strokeWidth={2} aria-hidden />{result.address}</span>
         )}
-        {result.excerpt && (
-          <p className="text-body-sm text-fg-muted line-clamp-2 text-pretty">{result.excerpt}</p>
-        )}
-      </div>
+        {result.excerpt && <span data-part="excerpt">{result.excerpt}</span>}
+      </span>
     </div>
   )
 }
 
-// ─── Doc row ───────────────────────────────────────────────────────────────────
-
-function DocRow({ doc }: { doc: DocResult }) {
-  const ext  = (doc.extension ?? 'file').toUpperCase()
-  const size = doc.fileSize ? formatDocFileSize(doc.fileSize) : null
+// Document row: the editor's casing is kept, the name wraps to two lines, the type is stated in words,
+// and the download control says it opens a new tab.
+function DocRow({ doc: item }: { doc: HubItem }) {
+  const doc   = { title: item.title, url: item.url, extension: item.doc?.extension ?? null, fileSize: item.doc?.fileSize ?? null }
+  const ext   = (doc.extension ?? 'file').toLowerCase()
+  const size  = doc.fileSize ? formatDocFileSize(doc.fileSize) : null
+  const type  = DOC_TYPE[ext] ?? `${ext.toUpperCase()} file`
+  const title = doc.title.replace(/\.[a-z0-9]{2,5}$/i, '')
 
   return (
-    <a
-      href={doc.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="group flex items-center gap-lg px-lg py-5.5 bg-surface border border-fg/8 rounded-ot-surface hover:border-brand/25 hover:bg-brand/2.5 motion-safe:transition-all motion-safe:duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-    >
-      <span
-        aria-hidden
-        className="flex-none inline-flex items-center px-sm py-1.25 bg-brand text-fg-on-brand text-[0.625rem] font-bold uppercase tracking-[0.14em] leading-none rounded-xs"
-      >
-        {ext}
+    <a href={doc.url} target="_blank" rel="noopener noreferrer" data-part="card" data-kind="doc">
+      <span data-part="filetile" aria-hidden="true"><FileText size={20} strokeWidth={1.75} /><b>{ext.toUpperCase()}</b></span>
+      <span data-part="card-body">
+        <span data-part="card-title">{title}</span>
+        <span data-part="meta">{type}{size && <><span aria-hidden="true">·</span>{size}</>}</span>
       </span>
-      <div className="flex-1 min-w-0">
-        <p className="text-title font-semibold text-fg leading-snug line-clamp-1 capitalize group-hover:text-brand motion-safe:transition-colors motion-safe:duration-150">
-          {doc.title}
-        </p>
-        {size && (
-          <p className="text-label text-fg-muted/50 mt-0.5 tabular-nums">{size}</p>
-        )}
-      </div>
-      <span className="flex-none flex items-center gap-xs text-label font-semibold uppercase tracking-label text-fg-muted group-hover:text-brand motion-safe:transition-colors motion-safe:duration-150">
-        <ArrowDownToLine
-          size={14}
-          className="motion-safe:group-hover:translate-y-0.5 motion-safe:transition-transform motion-safe:duration-150"
-          aria-hidden
-        />
-        Download
+      <span data-part="dl">
+        <ArrowDownToLine size={16} strokeWidth={2} aria-hidden />
+        <span data-part="dl-t">Download</span>
+        <span className="sr-only"> (opens in a new tab)</span>
       </span>
     </a>
   )
 }
 
-// ─── Skeletons ──────────────────────────────────────────────────────────────────
+// ─── Skeleton ──────────────────────────────────────────────────────────────────
 
-function BlogSkeleton() {
-  return (
-    <div className="bg-surface border border-fg/8 rounded-ot-surface overflow-hidden animate-pulse">
-      <div className="aspect-video bg-fg/8" />
-      <div className="px-md pt-md pb-lg space-y-sm">
-        <div className="h-2.5 bg-fg/8 rounded-full w-14" />
-        <div className="h-4 bg-fg/8 rounded-full w-full" />
-        <div className="h-4 bg-fg/8 rounded-full w-4/5" />
-        <div className="h-2.5 bg-fg/8 rounded-full w-24" />
-      </div>
-    </div>
-  )
+function Skeleton({ kind }: { kind: string }) {
+  return <li data-part="sk" data-kind={kind} aria-hidden="true"><span /><span><i /><i /><i /></span></li>
 }
 
-function EventSkeleton() {
-  return (
-    <div className="bg-surface border border-fg/8 rounded-ot-surface p-md animate-pulse flex gap-md">
-      <div className="w-11 flex-none space-y-1">
-        <div className="h-2 bg-fg/8 rounded-full w-full" />
-        <div className="h-5 bg-fg/8 rounded-full w-full" />
-      </div>
-      <div className="flex-1 space-y-sm">
-        <div className="h-2.5 bg-fg/8 rounded-full w-16" />
-        <div className="h-4 bg-fg/8 rounded-full w-full" />
-        <div className="h-2.5 bg-fg/8 rounded-full w-28" />
-      </div>
-    </div>
-  )
-}
+// ─── Result section (one per content bucket) ───────────────────────────────────
 
-function CardSkeleton() {
-  return (
-    <div className="bg-surface border border-fg/8 rounded-ot-surface p-md animate-pulse flex gap-md items-start">
-      <div className="w-13 h-13 bg-fg/8 rounded-ot-surface flex-none" />
-      <div className="flex-1 space-y-sm">
-        <div className="h-4 bg-fg/8 rounded-full w-3/4" />
-        <div className="h-3 bg-fg/8 rounded-full w-1/2" />
-      </div>
-    </div>
-  )
-}
+const SECTION_PAGE = 6
 
-function PageSkeleton() {
-  return (
-    <div className="bg-surface border border-fg/8 rounded-ot-surface p-md animate-pulse flex gap-md items-start">
-      <div className="w-4 h-4 bg-fg/8 rounded flex-none mt-0.5" />
-      <div className="flex-1 space-y-sm">
-        <div className="h-4 bg-fg/8 rounded-full w-full" />
-        <div className="h-3 bg-fg/8 rounded-full w-2/3" />
-      </div>
-    </div>
-  )
-}
+type SectionDef = { id: string; label: string; Icon: ReturnType<typeof bucketIcon> }
 
-function DocSkeleton() {
-  return (
-    <div className="flex items-center gap-lg px-lg py-5.5 bg-surface border border-fg/8 rounded-ot-surface animate-pulse">
-      <div className="w-9 h-5 bg-fg/8 rounded-xs flex-none" />
-      <div className="flex-1 space-y-xs">
-        <div className="h-4 bg-fg/8 rounded-full w-3/5" />
-        <div className="h-2.5 bg-fg/8 rounded-full w-12" />
-      </div>
-      <div className="w-20 h-3 bg-fg/8 rounded-full flex-none" />
-    </div>
-  )
-}
+function Section({ def, items, sel, focus }: { def: SectionDef; items: HubItem[]; sel: string[]; focus: boolean }) {
+  const ct        = def.id
+  const prefersRM = useReducedMotion()
+  const listId    = useId()
+  // how many cards are showing; starts over whenever the result set changes (derived, so no effect is needed)
+  const start = focus ? SECTION_PAGE * 2 : SECTION_PAGE
+  const sig   = `${items.length}:${items[0]?.id ?? ''}:${focus}`
+  const [more, setMore] = useState<{ sig: string; n: number }>({ sig, n: start })
+  const n       = more.sig === sig ? more.n : start
+  const visible = items.slice(0, n)
+  const hasMore = items.length > n
 
-// ─── Section heading ───────────────────────────────────────────────────────────
-
-function SectionHeading({ iconName, label }: { iconName: string | null; label: string }) {
-  return (
-    <header className="flex items-center gap-sm mb-lg pb-sm border-b border-fg/8">
-      <BucketIcon name={iconName} size={16} />
-      <h2 className="text-title leading-title font-semibold text-fg">{label}</h2>
-    </header>
-  )
-}
-
-// ─── Bucket result renderer ────────────────────────────────────────────────────
-
-const BUCKET_INITIAL = 6
-const BUCKET_PAGE    = 6
-
-function BucketResults({
-  bucket,
-  results,
-  docs,
-  loading,
-}: {
-  bucket:  TopicHubBucket
-  results: SearchResult[]
-  docs:    DocResult[]
-  loading: boolean
-}) {
-  const ct           = bucket.sectionContentType
-  const prefersRM    = useReducedMotion()
-  const listId       = useId()
-  const [visibleCount, setVisibleCount] = useState(BUCKET_INITIAL)
-
-  // Reset pagination when a new query delivers a fresh result set.
-  useEffect(() => { setVisibleCount(BUCKET_INITIAL) }, [results, docs])
-
-  const skeletonCount = ct === 'blogs' ? 6 : ct === 'events' ? 3 : 3
-
-  const gridClass: Record<string, string> = {
-    blogs:         'grid gap-md grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
-    events:        'grid gap-md grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
-    assets:        'flex flex-col gap-sm',
-    experiences:   'grid gap-md grid-cols-1 sm:grid-cols-2',
-    locations:     'grid gap-md grid-cols-1 sm:grid-cols-2',
-    practitioners: 'grid gap-md grid-cols-1 sm:grid-cols-2',
-  }
-
-  const SkeletonComp = () => {
-    if (ct === 'blogs') return <BlogSkeleton />
-    if (ct === 'events') return <EventSkeleton />
-    if (ct === 'assets') return <DocSkeleton />
-    if (ct === 'locations' || ct === 'practitioners') return <CardSkeleton />
-    return <PageSkeleton />
-  }
-
-  const allItems  = ct === 'assets' ? docs : results
-  const isEmpty   = allItems.length === 0
-  const visible   = allItems.slice(0, visibleCount)
-  const hasMore   = !loading && allItems.length > visibleCount
-
-  if (!loading && isEmpty) return null
-
-  function renderCard(item: SearchResult | DocResult, index: number) {
-    const isNew    = index >= BUCKET_INITIAL && index < visibleCount
-    const delay    = isNew ? (index - (visibleCount - BUCKET_PAGE)) * 0.04 : 0
-
+  function renderCard(item: HubItem, index: number) {
+    const isNew = index >= n - SECTION_PAGE && index >= start
     const cardVariants = {
       hidden: { opacity: 0, y: prefersRM ? 0 : 10 },
       show:   {
         opacity: 1, y: 0,
-        transition: { duration: prefersRM ? 0 : 0.22, delay, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] },
+        transition: { duration: prefersRM ? 0 : 0.22, delay: isNew ? (index - (n - SECTION_PAGE)) * 0.04 : 0, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] },
       },
     }
-
-    const inner = ct === 'assets'
-      ? <DocRow  doc={item as DocResult} />
-      : ct === 'blogs'         ? <BlogCard         result={item as SearchResult} />
-      : ct === 'events'        ? <EventCard        result={item as SearchResult} />
-      : ct === 'practitioners' ? <PractitionerCard result={item as SearchResult} />
-      : ct === 'locations'     ? <LocationCard     result={item as SearchResult} />
-      :                          <PageCard         result={item as SearchResult} />
-
+    const inner = ct === 'assets'      ? <DocRow doc={item} />
+      : ct === 'blogs'                 ? <BlogCard result={item} sel={sel} />
+      : ct === 'events'                ? <EventCard result={item} sel={sel} />
+      : ct === 'practitioners' && (item.practitionerTitle || item.credentials || item.imageUrl) ? <PractitionerCard result={item} sel={sel} />
+      : ct === 'locations'             ? <LocationCard result={item} />
+      :                                  <PageCard result={item} sel={sel} />
     return (
-      <motion.div
-        key={(item as SearchResult).id ?? (item as DocResult).id}
-        layout={false}
-        variants={cardVariants}
-        initial="hidden"
-        animate="show"
-      >
+      <motion.li key={item.id} layout={false} variants={cardVariants} initial="hidden" animate="show">
         {inner}
-      </motion.div>
+      </motion.li>
     )
   }
 
   return (
-    <section aria-label={bucket.sectionHeadline}>
-      <SectionHeading iconName={bucket.sectionIcon} label={bucket.sectionHeadline || 'Results'} />
-
-      <div
-        id={listId}
-        className={gridClass[ct] ?? 'grid gap-md grid-cols-1 sm:grid-cols-2'}
-      >
-        {loading
-          ? Array.from({ length: skeletonCount }).map((_, i) => <SkeletonComp key={i} />)
-          : (visible as Array<SearchResult | DocResult>).map((item, i) => renderCard(item, i))
-        }
-      </div>
-
+    <section data-part="bucket" data-ct={ct} id={`th-${ct}`} aria-labelledby={`${listId}-h`}>
+      <header data-part="bucket-head">
+        <span data-part="bucket-ic" aria-hidden="true"><def.Icon size={16} strokeWidth={2} /></span>
+        <h2 id={`${listId}-h`}>{def.label}</h2>
+        <span data-part="count">{items.length}</span>
+      </header>
+      <ul id={listId} data-part="grid" data-ct={ct}>{visible.map(renderCard)}</ul>
       {hasMore && (
-        <div className="mt-md flex justify-center">
-          <button
-            type="button"
-            onClick={() => setVisibleCount(c => c + BUCKET_PAGE)}
-            aria-controls={listId}
-            className="inline-flex items-center gap-xs px-lg py-sm text-label font-medium text-fg-muted border border-fg/15 rounded-ot-control bg-surface hover:border-brand hover:text-fg motion-safe:transition-all motion-safe:duration-150 cursor-pointer"
-          >
-            <ChevronDown size={14} aria-hidden />
-            {`View more · ${allItems.length - visibleCount} remaining`}
-          </button>
-        </div>
+        <button type="button" data-part="more" onClick={() => setMore({ sig, n: n + SECTION_PAGE })} aria-controls={listId}>
+          <ChevronDown size={16} aria-hidden />
+          {`Show ${Math.min(SECTION_PAGE, items.length - n)} more`}
+          <span data-part="more-n">of {items.length - n} remaining</span>
+        </button>
       )}
     </section>
   )
 }
 
+function SectionSkeleton({ def }: { def: SectionDef }) {
+  return (
+    <section data-part="bucket" data-ct={def.id} aria-hidden="true">
+      <header data-part="bucket-head">
+        <span data-part="bucket-ic"><def.Icon size={16} strokeWidth={2} /></span>
+        <h2>{def.label}</h2>
+      </header>
+      <ul data-part="grid" data-ct={def.id}>
+        {Array.from({ length: def.id === 'blogs' ? 3 : 2 }).map((_, i) => <Skeleton key={i} kind={def.id} />)}
+      </ul>
+    </section>
+  )
+}
+
+const TAXONOMY_KINDS = ['blogs', 'events', 'experiences', 'practitioners'] as const
+const TYPE_PARAM: Record<string, string> = {
+  blogs: 'Blog', events: 'Event', experiences: 'Experience', locations: 'Location', practitioners: 'Practitioner',
+}
+
 // ─── Main component ────────────────────────────────────────────────────────────
 
-export default function TopicHubPage({ config }: { config: TopicHubConfig }) {
+export default function TopicHubPage({ config, locale = 'en' }: { config: TopicHubConfig; locale?: string }) {
   const router               = useRouter()
   const searchParams         = useSearchParams()
   const prefersReducedMotion = useReducedMotion()
@@ -551,41 +315,116 @@ export default function TopicHubPage({ config }: { config: TopicHubConfig }) {
 
   const initialTopic = searchParams.get('topic') ?? ''
 
+  // Category browsing (CMS taxonomy): ?topics=a,b&match=any|all&from=<page key>, kept in the URL so it is shareable
+  const [topics, setTopics] = useState<string[]>(() => (searchParams.get('topics') ?? '').split(',').map(x => x.trim()).filter(Boolean))
+  const [match, setMatch]   = useState<Match>(searchParams.get('match') === 'all' ? 'all' : 'any')
+  const [fromKey, setFromKey] = useState<string | null>(searchParams.get('from'))
+  const [touched, setTouched] = useState(searchParams.has('match'))  // the reader chose Any/All themselves
+  const [panelOpen, setPanelOpen] = useState(true)
+  const [typeTab, setTypeTab] = useState('all')
+  const { pages: tagged, graphql: taggedGraphql } = useTaggedPages()
+  const topicMode  = topics.length > 0
+  const topicsRef  = useRef({ topics, match, fromKey })
+  useEffect(() => { topicsRef.current = { topics, match, fromKey } }, [topics, match, fromKey])
+
+  // The panel starts open; if the reader folds it, it stays folded for the visit.
+  useEffect(() => {
+    try { if (sessionStorage.getItem('th-panel') === 'closed') startTransition(() => setPanelOpen(false)) } catch { /* private mode */ }
+  }, [])
+  function changePanel(v: boolean) {
+    setPanelOpen(v)
+    try { sessionStorage.setItem('th-panel', v ? 'open' : 'closed') } catch { /* ignore */ }
+  }
+
+  function urlFor(text: string, next?: Partial<{ topics: string[]; match: 'any' | 'all'; fromKey: string | null }>) {
+    const cur = { ...topicsRef.current, ...next }
+    const params = new URLSearchParams()
+    if (text.trim()) params.set('topic', text.trim())
+    if (cur.topics.length) params.set('topics', cur.topics.join(','))
+    if (cur.topics.length > 1 && cur.match === 'all') params.set('match', 'all')
+    if (cur.fromKey && cur.topics.length) params.set('from', cur.fromKey)
+    return `?${params}`
+  }
+  function setSelection(nextTopics: string[], nextMatch: Match = match, nextFrom = fromKey) {
+    setTopics(nextTopics); setMatch(nextMatch); setFromKey(nextTopics.length ? nextFrom : null)
+    router.replace(urlFor(inputValueRef.current, { topics: nextTopics, match: nextMatch, fromKey: nextTopics.length ? nextFrom : null }), { scroll: false })
+  }
+  function toggleTopic(slug: string) {
+    if (topics.includes(slug)) {
+      const next = topics.filter(x => x !== slug)
+      if (!next.length) { setTouched(false); setSelection(next, 'any') } else setSelection(next)
+      return
+    }
+    // tell ODP which topic the reader chose (adding only; removing a topic is not an interest signal)
+    const cat = tagged?.flatMap(p => p.categories).find(c => c.slug === slug)
+    trackTopicSelect({ slug, group: cat?.group }, 'hub')
+    // a manual second pick narrows (All) until the reader chooses; arriving from an article starts on Any
+    const m: Match = !fromKey && !touched && topics.length === 1 ? 'all' : match
+    setSelection([...topics, slug], m)
+  }
+  function chooseMatch(m: Match) { setTouched(true); setSelection(topics, m) }
+  function clearTopics() { setTouched(false); setSelection([], 'any') }
+
   const headerName   = config.headerName   || 'Topic Hub'
   const headerEffect = config.headerEffect || 'outline'
   const effectClass  = EFFECT_CLASS[headerEffect] ?? ''
   const recommendations = config.searchRecommendations.slice(0, 5)
-  const buckets         = config.contentBuckets
+
+  // The editor's content buckets decide the sections (order, headline, icon). Any taggable kind of page the site actually
+  // has tagged but no bucket covers is searched too, after them under a default label, so nothing tagged is hidden.
+  const taggedKinds = useMemo(() => new Set((tagged ?? []).map(p => p.kind)), [tagged])
+  const buckets = useMemo(() => {
+    const have = new Set(config.contentBuckets.map(b => b.sectionContentType as string))
+    const extra = TAXONOMY_KINDS.filter(k => !have.has(k) && taggedKinds.has(k))
+      .map(k => ({ sectionHeadline: '', sectionIcon: null, sectionContentType: k }))
+    return [...config.contentBuckets, ...extra] as TopicHubBucket[]
+  }, [config.contentBuckets, taggedKinds])
+  const bucketSig = buckets.map(b => b.sectionContentType).join(',')
+  const sectionDefs: SectionDef[] = useMemo(() => buckets
+    .filter((b, i, all) => all.findIndex(x => x.sectionContentType === b.sectionContentType) === i)
+    .map(b => ({
+      id:    b.sectionContentType,
+      label: b.sectionHeadline || (b.sectionContentType === 'assets' ? 'Documents' : b.sectionContentType === 'locations' ? 'Locations' : defaultBucketName(b.sectionContentType, locale)),
+      Icon:  bucketIcon(b.sectionIcon, b.sectionContentType),
+    })), [buckets, locale])
 
   const [inputValue,    setInputValue]    = useState(initialTopic)
+  const inputValueRef = useRef(initialTopic)
+  useEffect(() => { inputValueRef.current = inputValue }, [inputValue])
+  const topicState = { sel: topics, match, from: fromKey }
   const [activeQuery,   setActiveQuery]   = useState(initialTopic)
   const [loading,       setLoading]       = useState(false)
   const [showDevPanel,  setShowDevPanel]  = useState(false)
   const [copied,        setCopied]        = useState(false)
 
-  // Per-bucket result state — keyed by sectionContentType
-  const [bucketResults, setBucketResults] = useState<Record<string, SearchResult[]>>({})
-  const [bucketDocs,    setBucketDocs]    = useState<DocResult[]>([])
+  // Keyword hits from every content bucket (documents and locations included); joined to their categories below
+  const [hits, setHits] = useState<HubItem[]>([])
 
   const debounceRef  = useRef<ReturnType<typeof setTimeout>>(undefined)
   const inputRef     = useRef<HTMLInputElement>(null)
-  const lastQueryRef = useRef<string>('')
+  const titleRef     = useRef<HTMLHeadingElement>(null)
+  const searchId     = useId()
+
+  // The Highlight marker draws once when the page loads.
+  useEffect(() => {
+    if (headerEffect !== 'highlight') return
+    const tid = setTimeout(() => titleRef.current?.setAttribute('data-in', ''), 150)
+    return () => clearTimeout(tid)
+  }, [headerEffect])
 
   const runSearch = useCallback(async (q: string) => {
     const trimmed = q.trim()
     if (trimmed.length < 2) {
-      setBucketResults({})
-      setBucketDocs([])
+      setHits([])
       setActiveQuery('')
       setLoading(false)
       return
     }
 
     setLoading(true)
-    lastQueryRef.current = trimmed
     const qs = encodeURIComponent(trimmed)
 
-    const fetchers = buckets.map(async bucket => {
+    const fetchers = buckets.map(async (bucket): Promise<HubItem[]> => {
       const ct = bucket.sectionContentType
       if (ct === 'assets') {
         const folderId = config.damFolderContainerId
@@ -593,54 +432,41 @@ export default function TopicHubPage({ config }: { config: TopicHubConfig }) {
           : ''
         const data = await fetch(`/api/search/docs?q=${qs}${folderId}`)
           .then(r => r.json()).catch(() => [])
-        return { ct, results: [], docs: Array.isArray(data) ? data : [] }
+        return (Array.isArray(data) ? data as DocResult[] : []).map(d => ({
+          id: d.id, key: d.id, kind: 'assets', categories: [], title: d.title, url: d.url, type: 'Page' as const,
+          doc: { extension: d.extension, fileSize: d.fileSize },
+        }))
       }
-
-      const typeMap: Record<string, string> = {
-        blogs:         'Blog',
-        events:        'Event',
-        experiences:   'Experience',
-        locations:     'Location',
-        practitioners: 'Practitioner',
-      }
-      const typeParam = typeMap[ct] ?? 'Page'
+      const typeParam = TYPE_PARAM[ct] ?? 'Page'
       const domainSuffix = config.siteDomain ? `&domain=${encodeURIComponent(config.siteDomain)}` : ''
       const data = await fetch(`/api/search?semantic=true&type=${typeParam}&limit=12&q=${qs}${domainSuffix}`)
         .then(r => r.json()).catch(() => [])
-      return { ct, results: Array.isArray(data) ? data : [], docs: [] }
+      return (Array.isArray(data) ? data as SearchResult[] : []).map(r => ({ ...r, key: r.id, kind: ct, categories: [] }))
     })
 
     try {
-      const all = await Promise.all(fetchers)
-      const newResults: Record<string, SearchResult[]> = {}
-      let newDocs: DocResult[] = []
-      for (const { ct, results, docs } of all) {
-        if (ct === 'assets') { newDocs = docs }
-        else newResults[ct] = results
-      }
-      setBucketResults(newResults)
-      setBucketDocs(newDocs)
+      const all = (await Promise.all(fetchers)).flat()
+      const seen = new Set<string>()
+      setHits(all.filter(h => (seen.has(h.id) ? false : (seen.add(h.id), true))))
       setActiveQuery(trimmed)
     } catch {
-      setBucketResults({})
-      setBucketDocs([])
+      setHits([])
     }
     setLoading(false)
-  }, [buckets, config.damFolderContainerId])
+  }, [buckets, config.damFolderContainerId, config.siteDomain])
 
+  // Runs for the keyword in the URL on load, and again if the bucket list grows once the tagged pages arrive
   useEffect(() => {
-    if (initialTopic) startTransition(() => { runSearch(initialTopic) })
+    if (inputValueRef.current.trim().length >= 2) startTransition(() => { runSearch(inputValueRef.current) })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [bucketSig])
 
   function handleInput(e: React.ChangeEvent<HTMLInputElement>) {
     const value = e.target.value
     setInputValue(value)
     clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
-      const params = new URLSearchParams()
-      if (value.trim()) params.set('topic', value.trim())
-      router.replace(`?${params}`, { scroll: false })
+      router.replace(urlFor(value), { scroll: false })
       runSearch(value)
     }, 450)
   }
@@ -648,9 +474,7 @@ export default function TopicHubPage({ config }: { config: TopicHubConfig }) {
   function handleSuggest(label: string) {
     setInputValue(label)
     clearTimeout(debounceRef.current)
-    const params = new URLSearchParams()
-    params.set('topic', label)
-    router.replace(`?${params}`, { scroll: false })
+    router.replace(urlFor(label), { scroll: false })
     runSearch(label)
     inputRef.current?.focus()
   }
@@ -658,314 +482,277 @@ export default function TopicHubPage({ config }: { config: TopicHubConfig }) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     clearTimeout(debounceRef.current)
-    const params = new URLSearchParams()
-    if (inputValue.trim()) params.set('topic', inputValue.trim())
-    router.replace(`?${params}`, { scroll: false })
+    router.replace(urlFor(inputValue), { scroll: false })
     runSearch(inputValue)
   }
 
-  function handleCopy() {
-    const q = encodeURIComponent(lastQueryRef.current)
-    const lines = [
-      `# Topic Hub — last search: "${lastQueryRef.current}"`,
-      ``,
-      `# API requests (parallel)`,
-      ...buckets.map(b => {
+  function handleClear() {
+    setInputValue('')
+    clearTimeout(debounceRef.current)
+    router.replace(urlFor(''), { scroll: false })
+    runSearch('')
+    inputRef.current?.focus()
+  }
+
+  // ── One result pipeline ──────────────────────────────────────────────────────
+  // With a keyword, the scope is that keyword's hits (each joined to its categories); otherwise every tagged page.
+  // Topics then refine whichever scope it is, and the Topics panel counts from the same scope.
+  const searched = activeQuery.length >= 2
+  const taggedItems = useMemo(() => (tagged ?? []).map(fromTagged), [tagged])
+  const catsByKey = useMemo(() => new Map((tagged ?? []).map(p => [p.key, p.categories])), [tagged])
+  const hitItems = useMemo(() => hits.map(h => ({ ...h, categories: catsByKey.get(h.id) ?? [] })), [hits, catsByKey])
+  const scope = searched ? hitItems : taggedItems
+  const byCommon = topics.length > 1 && match === 'any'
+  const pool = useMemo(() => {
+    const list = poolFor(scope, topicState)
+    if (searched) return list // Graph's relevance order
+    return list.slice().sort((a, b) => {
+      if (byCommon) { const d = score(b, topics) - score(a, topics); if (d) return d }
+      return (b.published ?? '') > (a.published ?? '') ? 1 : (b.published ?? '') < (a.published ?? '') ? -1 : 0
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope, topics, match, fromKey, searched, byCommon])
+
+  const sections = sectionDefs.map(d => ({ def: d, items: pool.filter(i => i.kind === d.id) }))
+  const present = sections.filter(x => x.items.length)
+  const tab = present.length > 1 && present.some(x => x.def.id === typeTab) ? typeTab : 'all'
+  const browsing = !searched && !topicMode
+  const topicList = useMemo(() => topicsOf(tagged ?? []), [tagged])
+
+  // What was asked of Graph and what the browser does next (for the Query inspector)
+  function inspectorLines(): string[] {
+    const urls = (() => {
+      const q = encodeURIComponent(activeQuery)
+      return buckets.map(b => {
         const ct = b.sectionContentType
-        if (ct === 'assets') {
-          const fid = config.damFolderContainerId ? `&folderId=${config.damFolderContainerId}` : ''
-          return `GET /api/search/docs?q=${q}${fid}`
-        }
-        const typeMap: Record<string, string> = {
-          blogs: 'Blog', events: 'Event', experiences: 'Experience',
-          locations: 'Location', practitioners: 'Practitioner',
-        }
-        const dom = config.siteDomain ? `&domain=${config.siteDomain}` : ''
-        return `GET /api/search?semantic=true&type=${typeMap[ct] ?? 'Page'}&limit=12&q=${q}${dom}`
-      }),
-      ``,
-      `# Content Graph strategy`,
-      `ordering:  _ranking: SEMANTIC  _semanticWeight: 0.8`,
-      `fulltext:  fuzzy: true, synonyms: ONE`,
-      `scoping:   ${config.siteDomain ? `domain=${config.siteDomain}` : 'OT_ThemeManager.frontEndDomain (host fallback)'}`,
+        if (ct === 'assets') return `/api/search/docs?q=${q}${config.damFolderContainerId ? `&folderId=${config.damFolderContainerId}` : ''}`
+        return `/api/search?semantic=true&type=${TYPE_PARAM[ct] ?? 'Page'}&limit=12&q=${q}${config.siteDomain ? `&domain=${config.siteDomain}` : ''}`
+      })
+    })()
+    return [
+      '# Topic Hub: one result list for keywords and categories',
+      '',
+      '# 1. Tagged pages (one request to Optimizely Graph per page load)',
+      'GET /api/topics?view=all',
+      '',
+      taggedGraphql?.query ?? '(loading)',
+      '',
+      JSON.stringify(taggedGraphql?.variables ?? {}, null, 2),
+      '',
+      ...(searched ? [
+        '# 2. Keyword "' + activeQuery + '" (parallel Graph requests, one per content bucket)',
+        ...urls.map(u => 'GET ' + u),
+        '',
+        'ordering:  _ranking: SEMANTIC  _semanticWeight: 0.3 to 0.8',
+        'fulltext:  fuzzy: true, synonyms: ONE',
+        'scoping:   ' + (config.siteDomain ? 'domain=' + config.siteDomain : 'OT_ThemeManager.frontEndDomain (host fallback)'),
+        '',
+      ] : []),
+      '# Then, in the browser (no further requests)',
+      searched ? 'scope:         the keyword hits, each joined to its tagged page by key for its categories' : 'scope:         every tagged page',
+      `scope size:    ${scope.length}`,
+      `topics:        ${topics.length ? topics.join(', ') : '(none)'}`,
+      `match:         ${topics.length > 1 ? match : 'n/a'}`,
+      `from article:  ${fromKey ?? '(none)'}`,
+      `results:       ${pool.length}`,
+      '',
+      '# Topic counts, filtering and ordering are computed from the scope above,',
+      '# so a count on a topic always equals the results you get.',
     ]
-    navigator.clipboard.writeText(lines.join('\n')).then(() => {
+  }
+
+  function handleCopy() {
+    navigator.clipboard.writeText(inspectorLines().join('\n')).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 1800)
     })
   }
 
-  const hasAnyResults = buckets.some(b =>
-    b.sectionContentType === 'assets'
-      ? bucketDocs.length > 0
-      : (bucketResults[b.sectionContentType] ?? []).length > 0
-  )
-  const noResults = !loading && activeQuery.length >= 2 && !hasAnyResults
+  const scoped = SCOPED_EFFECTS.has(headerEffect)
+  const strict = topics.length > 1 && match === 'all'
+  const n = pool.length
+  const kw = inputValue.trim()
+
+  let status: React.ReactNode
+  if (loading) status = `Searching for “${kw}”…`
+  else if (browsing) status = <><b>{t(locale, 'hub.latest')}</b>{t(locale, 'hub.latestRest')}</>
+  else {
+    status = (
+      <>
+        <b>{t(locale, n === 1 ? 'hub.resultCount' : 'hub.resultsCount', { count: n })}</b>
+        {searched && <> {t(locale, 'hub.for')} “{activeQuery}”</>}
+        {topicMode && (fromKey && match === 'any' && topics.length > 1
+          ? t(locale, 'hub.sharesTopic')
+          : <>{t(locale, 'hub.tagged')}<Names slugs={topics} all={topicList} joiner={t(locale, match === 'all' ? 'hub.and' : 'hub.or')} /></>)}
+        {n > 0 ? t(locale, searched ? 'hub.byRelevance' : byCommon ? 'hub.byCommon' : 'hub.newest') : '.'}
+      </>
+    )
+  }
 
   return (
-    <>
+    <div data-block="topic-hub" data-mode={topicMode || inputValue.trim() ? 'results' : 'browse'}>
       {/* ── Query inspector flyout ── */}
       <AnimatePresence>
         {showDevPanel && (
           <>
             <motion.div
               key="th-query-backdrop"
+              data-part="insp-scrim"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1, transition: { duration: dur(150) } }}
               exit={{ opacity: 0, transition: { duration: dur(120) } }}
               onClick={() => setShowDevPanel(false)}
-              className="fixed inset-0 z-40 bg-canvas/50 backdrop-blur-[2px]"
               aria-hidden
             />
-            <motion.div
+            <motion.aside
               key="th-query-flyout"
+              data-part="inspector"
               initial={{ x: '100%' }}
               animate={{ x: 0, transition: { duration: dur(320), ease: [0.16, 1, 0.3, 1] } }}
               exit={{ x: '100%', transition: { duration: dur(220), ease: [0.4, 0, 1, 1] } }}
               role="dialog"
-              aria-label="Query inspector"
-              className="fixed top-0 right-0 bottom-0 z-50 flex flex-col"
-              style={{
-                width: 'min(480px, calc(100vw - 48px))',
-                background: 'oklch(0.085 0.008 240)',
-                borderLeft: '1px solid oklch(1 0 0 / 0.09)',
-                boxShadow: '-20px 0 80px oklch(0 0 0 / 0.50)',
-                fontFamily: 'var(--font-geist-mono, monospace)',
-              }}
+              aria-labelledby="th-insp-h"
             >
-              <div
-                className="flex items-center justify-between px-md py-sm shrink-0"
-                style={{ borderBottom: '1px solid oklch(1 0 0 / 0.08)' }}
-              >
-                <div className="flex items-center gap-xs">
-                  <Code2 size={13} style={{ color: 'oklch(0.91 0.27 132)' }} aria-hidden />
-                  <span className="text-[11px] uppercase tracking-[0.14em] font-bold select-none" style={{ color: 'oklch(0.72 0.18 132)' }}>
-                    Query inspector
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowDevPanel(false)}
-                  aria-label="Close query inspector"
-                  className="opacity-40 hover:opacity-90 transition-opacity duration-150 p-1 rounded"
-                  style={{ color: 'oklch(0.72 0.01 250)' }}
-                >
-                  <X size={14} />
+              <div data-part="insp-head">
+                <h2 id="th-insp-h"><Code2 size={14} aria-hidden />Query inspector</h2>
+                <button type="button" data-part="icon-btn" onClick={() => setShowDevPanel(false)} aria-label="Close query inspector">
+                  <X size={16} aria-hidden />
                 </button>
               </div>
-
-              <div className="flex-1 overflow-y-auto overflow-x-hidden">
-                <pre className="px-md py-lg text-[14px] leading-[1.9] whitespace-pre-wrap break-all" style={{ color: 'oklch(0.72 0.01 250)' }}>
-                  {(() => {
-                    const q = encodeURIComponent(activeQuery)
-                    return (
-                      <>
-                        <span style={{ color: 'oklch(0.40 0.01 250)' }}>{'# API requests (parallel)\n'}</span>
-                        {buckets.map((b, i) => {
-                          const ct = b.sectionContentType
-                          const typeMap: Record<string, string> = {
-                            blogs: 'Blog', events: 'Event', experiences: 'Experience',
-                            locations: 'Location', practitioners: 'Practitioner',
-                          }
-                          if (ct === 'assets') {
-                            const fid = config.damFolderContainerId ? `&folderId=${config.damFolderContainerId}` : ''
-                            return (
-                              <span key={i}>
-                                <span style={{ color: 'oklch(0.91 0.27 132)' }}>{'GET '}</span>
-                                <span style={{ color: 'oklch(0.80 0.22 132)' }}>{`/api/search/docs?q=${q}${fid}\n`}</span>
-                              </span>
-                            )
-                          }
-                          const dom = config.siteDomain ? `&domain=${config.siteDomain}` : ''
-                          return (
-                            <span key={i}>
-                              <span style={{ color: 'oklch(0.91 0.27 132)' }}>{'GET '}</span>
-                              <span style={{ color: 'oklch(0.82 0.01 250)' }}>{`/api/search?semantic=true&type=${typeMap[ct] ?? 'Page'}&limit=12&q=${q}${dom}\n`}</span>
-                            </span>
-                          )
-                        })}
-                        {'\n'}
-                        <span style={{ color: 'oklch(0.40 0.01 250)' }}>{'# Content Graph strategy\n'}</span>
-                        <span style={{ color: 'oklch(0.55 0.01 250)' }}>{'ordering:  '}</span>
-                        <span style={{ color: 'oklch(0.91 0.27 132)' }}>{'_ranking: SEMANTIC  _semanticWeight: 0.8\n'}</span>
-                        <span style={{ color: 'oklch(0.55 0.01 250)' }}>{'fulltext:  '}</span>
-                        <span style={{ color: 'oklch(0.78 0.01 250)' }}>{'fuzzy: true, synonyms: ONE\n'}</span>
-                        <span style={{ color: 'oklch(0.55 0.01 250)' }}>{'scoping:   '}</span>
-                        <span style={{ color: 'oklch(0.78 0.01 250)' }}>{config.siteDomain ? `domain=${config.siteDomain}` : 'OT_ThemeManager.frontEndDomain (host fallback)'}</span>
-                      </>
-                    )
-                  })()}
-                </pre>
+              <CodeView lines={inspectorLines()} label="Query details" />
+              <div data-part="insp-foot">
+                <button type="button" data-part="insp-copy" onClick={handleCopy}>{copied ? 'Copied' : 'Copy'}</button>
+                <span role="status" className="sr-only">{copied ? 'Query details copied' : ''}</span>
               </div>
-
-              <div className="shrink-0 px-md py-sm flex items-center justify-end" style={{ borderTop: '1px solid oklch(1 0 0 / 0.08)' }}>
-                <button
-                  type="button"
-                  onClick={handleCopy}
-                  aria-label="Copy query details"
-                  className="text-[10px] uppercase tracking-widest font-bold px-md py-1.5 rounded-ot-control transition-all duration-150"
-                  style={{
-                    color:      copied ? 'oklch(0.91 0.27 132)' : 'oklch(0.55 0.01 250)',
-                    background: copied ? 'oklch(0.91 0.27 132 / 0.12)' : 'oklch(1 0 0 / 0.05)',
-                    border:     '1px solid oklch(1 0 0 / 0.08)',
-                  }}
-                >
-                  {copied ? '✓ Copied' : 'Copy'}
-                </button>
-              </div>
-            </motion.div>
+            </motion.aside>
           </>
         )}
       </AnimatePresence>
 
-      {/* ── Hero ── */}
-      <section className="bg-canvas border-b border-fg/8 px-md lg:px-lg py-lg">
-        <div className="mx-auto max-w-7xl">
-          <div className="flex flex-col lg:flex-row lg:items-center gap-md lg:gap-xl">
+      {/* ── Hero: stacked, so any header name fits ── */}
+      <section data-part="hero">
+        <div data-part="hero-in">
+          <div data-part="hero-main">
+          {headerEffect === 'depth3d' ? (
+            <h1 data-part="title"><PrimaryTextDepth3D text={headerName} /></h1>
+          ) : (
+            <h1
+              ref={titleRef}
+              data-part="title"
+              data-effect={scoped ? headerEffect : undefined}
+              data-animate={headerEffect === 'highlight' ? '' : undefined}
+              className={scoped ? undefined : effectClass || undefined}
+              data-text={headerEffect === 'glitch' ? headerName : undefined}
+              data-pause-offscreen={headerEffect === 'animatedGradient' || headerEffect === 'glitch' ? '' : undefined}
+            >
+              {headerEffect === 'highlight'
+                ? <span data-part="mark-line"><span data-part="mark-text">{headerName}</span></span>
+                : headerName}
+            </h1>
+          )}
 
-            {/* Brand stamp */}
-            <div className="flex-none lg:w-56 xl:w-64">
-              <div className="flex items-center gap-xs mb-xs">
-                <Sparkles size={13} className="text-brand" aria-hidden />
-                <span className="text-label font-semibold uppercase tracking-label text-brand">
-                  AI-Powered Discovery
-                </span>
-              </div>
+          <form data-part="search" onSubmit={handleSubmit} role="search" aria-label="Topic search">
+            <label htmlFor={searchId} className="sr-only">Topic or phrase</label>
+            <span data-part="field">
+              <Search size={20} strokeWidth={2} data-part="field-ic" aria-hidden />
+              <input
+                ref={inputRef}
+                id={searchId}
+                type="search"
+                value={inputValue}
+                onChange={handleInput}
+                placeholder={t(locale, topicMode ? 'hub.searchWithin' : 'hub.searchPlaceholder')}
+                autoComplete="off"
+              />
+              {loading ? (
+                <span data-part="spin" aria-hidden="true"><Loader2 size={18} strokeWidth={2} /></span>
+              ) : inputValue ? (
+                <button type="button" data-part="icon-btn" onClick={handleClear} aria-label="Clear search">
+                  <X size={18} strokeWidth={2} aria-hidden />
+                </button>
+              ) : null}
+            </span>
+          </form>
 
-              {/* Title with configurable effect */}
-              {headerEffect === 'depth3d' ? (
-                <h1 className="text-display leading-none tracking-display font-extrabold">
-                  <PrimaryTextDepth3D text={headerName} />
-                </h1>
-              ) : headerEffect === 'highlight' ? (
-                <h1 className="text-display leading-none tracking-display font-extrabold">
-                  <span className={effectClass}>{headerName}</span>
-                </h1>
-              ) : (
-                <h1
-                  className={['text-display leading-none tracking-display font-extrabold', effectClass].filter(Boolean).join(' ')}
-                  data-text={headerEffect === 'glitch' ? headerName : undefined}
-                  data-pause-offscreen={headerEffect === 'animatedGradient' || headerEffect === 'glitch' ? '' : undefined}
+          {/* Suggestions stay visible after a search; the active topic is pressed. */}
+          {recommendations.length > 0 && (
+            <div data-part="recs" role="group" aria-label="Suggested topics">
+              <span data-part="recs-k">Try</span>
+              {recommendations.map(rec => (
+                <button
+                  key={rec.label}
+                  type="button"
+                  data-part="chip-btn"
+                  aria-pressed={activeQuery.toLowerCase() === rec.label.toLowerCase()}
+                  onClick={() => handleSuggest(rec.label)}
                 >
-                  {headerName}
-                </h1>
-              )}
+                  {rec.label}
+                </button>
+              ))}
             </div>
-
-            {/* Search column */}
-            <div className="flex-1 min-w-0">
-              <form onSubmit={handleSubmit} role="search" aria-label="Topic search">
-                <div className="relative">
-                  <Search
-                    size={16}
-                    className="absolute left-md top-1/2 -translate-y-1/2 text-fg-muted/50 pointer-events-none"
-                    aria-hidden
-                  />
-                  <input
-                    ref={inputRef}
-                    type="search"
-                    value={inputValue}
-                    onChange={handleInput}
-                    placeholder="Enter a topic, question, or phrase…"
-                    aria-label="Topic or phrase"
-                    autoFocus
-                    className="w-full pl-10 pr-12 py-md bg-surface border border-fg/15 rounded-ot-control text-body text-fg placeholder:text-fg-muted/40 outline-none focus:border-brand focus:ring-2 focus:ring-brand/20 motion-safe:transition-all motion-safe:duration-200 appearance-none"
-                  />
-                  {loading && (
-                    <Loader2
-                      size={16}
-                      className="absolute right-md top-1/2 -translate-y-1/2 text-brand animate-spin"
-                      aria-label="Loading…"
-                    />
-                  )}
-                </div>
-              </form>
-
-              {/* Query confirmation + dev panel toggle */}
-              {activeQuery && !loading && (
-                <div className="mt-xs flex items-center gap-sm">
-                  <p className="text-label text-fg-muted/70 flex-1">
-                    Showing results for{' '}
-                    <span className="font-semibold text-fg-muted">&ldquo;{activeQuery}&rdquo;</span>
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setShowDevPanel(v => !v)}
-                    aria-label={showDevPanel ? 'Hide query inspector' : 'Show query inspector'}
-                    aria-pressed={showDevPanel}
-                    className={[
-                      'flex items-center gap-1.25 px-sm h-7 rounded-ot-control transition-all duration-200',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1',
-                      showDevPanel
-                        ? 'text-brand bg-brand/12 ring-1 ring-brand/30'
-                        : 'text-fg-muted/55 bg-fg/5 ring-1 ring-fg/12 hover:text-fg hover:ring-fg/25 hover:bg-fg/8',
-                    ].join(' ')}
-                  >
-                    <Code2 size={12} />
-                    <span className="text-[9px] font-bold uppercase tracking-widest">Query</span>
-                  </button>
-                </div>
-              )}
-
-              {/* Recommendations */}
-              {!inputValue && recommendations.length > 0 && (
-                <div className="mt-sm flex flex-wrap gap-xs items-center">
-                  <span className="text-label text-fg-muted/60 shrink-0">Try:</span>
-                  {recommendations.map(rec => (
-                    <button
-                      key={rec.label}
-                      type="button"
-                      onClick={() => handleSuggest(rec.label)}
-                      className="text-label text-fg-muted border border-fg/15 rounded-ot-control px-sm py-xs hover:border-brand hover:text-fg motion-safe:transition-all motion-safe:duration-150 cursor-pointer"
-                    >
-                      {rec.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
+          )}
           </div>
+
+          <aside data-part="graph-card" aria-label={t(locale, 'hub.aboutThisPage')}>
+            <p data-part="graph-k">{t(locale, 'hub.graphTitle')}</p>
+            <p data-part="graph-d">{t(locale, 'hub.graphBlurb')}</p>
+            <button type="button" data-part="graph-btn" onClick={() => setShowDevPanel(v => !v)} aria-pressed={showDevPanel}>
+              <Code2 size={16} aria-hidden />
+              {t(locale, showDevPanel ? 'hub.graphHide' : 'hub.graphView')}
+            </button>
+          </aside>
         </div>
       </section>
 
-      {/* ── Results ── */}
-      <div className="bg-canvas min-h-[50vh]">
-        <div className="mx-auto max-w-7xl px-md lg:px-lg py-lg space-y-xl">
-
-          {buckets.map(bucket => (
-            <BucketResults
-              key={bucket.sectionContentType}
-              bucket={bucket}
-              results={bucketResults[bucket.sectionContentType] ?? []}
-              docs={bucket.sectionContentType === 'assets' ? bucketDocs : []}
-              loading={loading}
-            />
-          ))}
-
-          {/* No results */}
-          {noResults && (
-            <div className="text-center py-xl">
-              <p className="text-title text-fg-muted">No results found for &ldquo;{activeQuery}&rdquo;</p>
-              <p className="mt-xs text-body text-fg-muted/60">
-                Try different phrasing or one of the suggested topics above.
-              </p>
-            </div>
+      {/* ── Results: topics refine whatever the keyword (or the whole site) returned ── */}
+      <div data-part="results">
+        <div data-part="results-in">
+          {tagged && tagged.length > 0 && (
+            <TopicPanel pages={tagged} pool={scope} st={topicState} open={panelOpen} onOpen={changePanel}
+              onToggle={toggleTopic} onMatch={chooseMatch} onClear={clearTopics} locale={locale} />
           )}
 
-          {/* Initial empty state */}
-          {!inputValue && !loading && (
-            <div className="py-xl text-center">
-              <Sparkles size={32} className="mx-auto mb-md text-brand/20" aria-hidden />
-              <p className="text-title text-fg-muted">Enter a topic above to discover related content</p>
-              <p className="mt-xs text-body text-fg-muted/50">
-                Results are curated across {buckets.length > 0 ? buckets.map(b => b.sectionHeadline || b.sectionContentType).join(', ') : 'events, research, and documents'} using semantic AI.
-              </p>
-            </div>
-          )}
+          <section data-part="tp-results" aria-label={t(locale, 'hub.results')}>
+            {fromKey && topicMode && <p data-part="tp-from"><ArrowLeft aria-hidden="true" />{t(locale, 'hub.fromArticle')}</p>}
+            <p data-part="tp-status" role="status">{status}</p>
 
+            {!loading && present.length > 1 && (
+              <div data-part="tp-tabs" role="group" aria-label={t(locale, 'hub.contentType')}>
+                <button type="button" aria-pressed={tab === 'all'} onClick={() => setTypeTab('all')}><LayoutGrid aria-hidden="true" />{t(locale, 'hub.allTypes')} <span>{n}</span></button>
+                {present.map(x => (
+                  <button key={x.def.id} type="button" aria-pressed={tab === x.def.id} onClick={() => setTypeTab(x.def.id)}><x.def.Icon aria-hidden="true" />{x.def.label} <span>{x.items.length}</span></button>
+                ))}
+              </div>
+            )}
+
+            {loading && !hits.length ? (
+              sectionDefs.map(d => <SectionSkeleton key={d.id} def={d} />)
+            ) : n === 0 ? (
+              searched || topicMode ? (
+                <div data-part="tp-empty">
+                  <p><b>{searched && !topicMode ? `No results for “${activeQuery}”` : t(locale, 'hub.emptyTitle')}</b></p>
+                  <p>{searched && !topicMode ? 'Try different phrasing, or pick one of the suggested topics above.' : t(locale, strict ? 'hub.emptyStrict' : 'hub.emptyTry')}</p>
+                  {topicMode && (strict
+                    ? <button type="button" data-part="tp-link" onClick={() => chooseMatch('any')}>{t(locale, 'hub.matchAnyTopic')}</button>
+                    : <button type="button" data-part="tp-link" onClick={clearTopics}>{t(locale, 'hub.clear')}</button>)}
+                </div>
+              ) : !tagged ? null : (
+                <div data-part="empty">
+                  <span data-part="empty-ic" aria-hidden="true"><Sparkles size={26} strokeWidth={1.75} /></span>
+                  <p data-part="empty-t">Enter a topic to discover related content</p>
+                  <p data-part="empty-d">Results come from {buckets.length > 0 ? buckets.map(b => b.sectionHeadline || b.sectionContentType).join(', ') : 'events, research, and documents'}, ranked by semantic AI.</p>
+                </div>
+              )
+            ) : (
+              <div data-part="sections">
+                {present.filter(x => tab === 'all' || x.def.id === tab).map(x => (
+                  <Section key={x.def.id} def={x.def} items={x.items} sel={topics} focus={tab !== 'all'} />
+                ))}
+              </div>
+            )}
+          </section>
         </div>
       </div>
-    </>
+    </div>
   )
 }
